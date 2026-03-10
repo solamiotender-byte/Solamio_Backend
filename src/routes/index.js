@@ -1,0 +1,22 @@
+import express from "express";
+import authRouter from "../routes/auth.routes.js";
+import userRouter from "./user.routes.js";
+import leadRouter from "./lead.routes.js";
+import expenseRouter from "./expense.routes.js";
+import reportRouter from "./report.routes.js";
+import visitRouter from "./visit.routes.js"
+import attendancRouter from "./attendance.routes.js";
+
+
+const apiV1Router = express.Router();
+
+// Mount all sub-routers under their respective paths
+apiV1Router.use("/auth", authRouter);
+apiV1Router.use("/user", userRouter);
+apiV1Router.use("/lead", leadRouter);
+apiV1Router.use("/expense", expenseRouter);
+apiV1Router.use("/report", reportRouter);
+apiV1Router.use("/visit", visitRouter);
+apiV1Router.use("/attendance", attendancRouter);
+
+export default apiV1Router;

@@ -1,0 +1,179 @@
+### Credit Note API Tests
+
+# Note: Replace {{baseUrl}}, {{token}}, {{companyId}}, {{clientId}}, and {{invoiceId}} with actual values
+
+@baseUrl = http://localhost:9000/api/v1
+@token = YOUR_AUTH_TOKEN_HERE
+@companyId = YOUR_COMPANY_ID_HERE
+
+@invoiceId = YOUR_INVOICE_ID_HERE
+
+@clientId = YOUR_CREDIT_NOTE_ID_HERE
+
+@creditNoteId = YOUR_CREDIT_NOTE_ID_HERE
+
+### 1. Create Credit Note
+POST {{baseUrl}}/api/finance/sales/credit-notes
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "companyId": "{{companyId}}",
+  "clientId": "{{clientId}}",
+  "invoiceId": "{{invoiceId}}",
+  "creditNoteNumber": "CN-001",
+  "creditNoteDate": "2025-01-15",
+  "originalInvoiceNumber": "INV-001",
+  "originalInvoiceDate": "2025-01-01",
+  "taxType": "exclusive",
+  "discountType": "flat",
+  "discountValue": 0,
+  "shipping": 0,
+  "roundOff": false,
+  "showHSN": true,
+  "showUnit": true,
+  "showSignature": false,
+  "items": [
+    {
+      "name": "Product A",
+      "hsn": "1234",
+      "unit": "pcs",
+      "quantity": 2,
+      "rate": 100,
+      "discount": 0,
+      "discountType": "flat",
+      "taxType": "cgst_sgst",
+      "taxRate": 18,
+      "reason": "Quality issue with the product"
+    }
+  ],
+  "reason": "Customer complained about product quality",
+  "creditType": "quality_issue",
+  "terms": "Credit note terms and conditions",
+  "notes": "Additional notes for this credit note",
+  "priority": "high"
+}
+
+### 2. Get All Credit Notes
+GET {{baseUrl}}/api/finance/sales/credit-notes
+Authorization: Bearer {{token}}
+
+### 3. Get Credit Notes with Filters
+GET {{baseUrl}}/api/finance/sales/credit-notes?page=1&limit=10&status=draft&priority=high&startDate=2025-01-01&endDate=2025-12-31&search=CN-001
+Authorization: Bearer {{token}}
+
+### 4. Get Credit Note by ID
+GET {{baseUrl}}/api/finance/sales/credit-notes/{{creditNoteId}}
+Authorization: Bearer {{token}}
+
+### 5. Update Credit Note
+PUT {{baseUrl}}/api/finance/sales/credit-notes/{{creditNoteId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "reason": "Updated reason for credit note",
+  "priority": "medium",
+  "notes": "Updated notes"
+}
+
+### 6. Approve Credit Note
+PATCH {{baseUrl}}/api/finance/sales/credit-notes/{{creditNoteId}}/approve
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "approvalNotes": "Approved after review"
+}
+
+### 7. Update Credit Note Status
+PATCH {{baseUrl}}/api/finance/sales/credit-notes/{{creditNoteId}}/status
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "status": "acknowledged",
+  "notes": "Client has acknowledged the credit note"
+}
+
+### 8. Mark Credit Note as Resolved
+PATCH {{baseUrl}}/api/finance/sales/credit-notes/{{creditNoteId}}/resolve
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "resolutionStatus": "refund_processed",
+  "resolutionNotes": "Refund has been processed to client account",
+  "adjustmentAmount": 236
+}
+
+### 9. Dispute Credit Note
+PATCH {{baseUrl}}/api/finance/sales/credit-notes/{{creditNoteId}}/dispute
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "notes": "Client disputes the credit note amount"
+}
+
+### 10. Get Credit Note Statistics
+GET {{baseUrl}}/api/finance/sales/credit-notes/stats
+Authorization: Bearer {{token}}
+
+### 11. Get Credit Notes by Invoice
+GET {{baseUrl}}/api/finance/sales/credit-notes/invoice/{{invoiceId}}
+Authorization: Bearer {{token}}
+
+### 12. Get Credit Notes by Client
+GET {{baseUrl}}/api/finance/sales/credit-notes/client/{{clientId}}
+Authorization: Bearer {{token}}
+
+### 13. Delete Credit Note (only draft status)
+DELETE {{baseUrl}}/api/finance/sales/credit-notes/{{creditNoteId}}
+Authorization: Bearer {{token}}
+
+### Sample Response Structure
+
+# Create Credit Note Response:
+# {
+#   "success": true,
+#   "message": "Credit note created successfully",
+#   "data": {
+#     "_id": "...",
+#     "companyId": "...",
+#     "clientId": {...},
+#     "invoiceId": {...},
+#     "creditNoteNumber": "CN-001",
+#     "creditNoteDate": "2025-01-15T00:00:00.000Z",
+#     "originalInvoiceNumber": "INV-001",
+#     "originalInvoiceDate": "2025-01-01T00:00:00.000Z",
+#     "status": "draft",
+#     "resolutionStatus": "pending",
+#     "priority": "high",
+#     "creditType": "quality_issue",
+#     "reason": "Customer complained about product quality",
+#     "items": [...],
+#     "subtotal": 236,
+#     "totalTax": 36,
+#     "grandTotal": 236,
+#     "pendingRefund": 236,
+#     "createdAt": "...",
+#     "updatedAt": "..."
+#   }
+# }
+
+# Statistics Response:
+# {
+#   "success": true,
+#   "data": {
+#     "totalCreditNotes": 10,
+#     "totalAmount": 5000,
+#     "pendingAmount": 3000,
+#     "resolvedAmount": 2000,
+#     "draftCount": 2,
+#     "sentCount": 3,
+#     "acknowledgedCount": 2,
+#     "disputedCount": 1,
+#     "resolvedCount": 2
+#   }
+# }

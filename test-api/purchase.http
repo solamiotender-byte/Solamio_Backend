@@ -1,0 +1,224 @@
+### Purchase API Test File
+### Base URL for all requests
+@baseUrl = http://localhost:5000/api/v1/finance/purchases/purchase
+@authToken = YOUR_JWT_TOKEN_HERE
+
+### Create a new purchase
+POST {{baseUrl}}
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "vendorId": "67829f123456789012345678",
+  "billDate": "2025-01-01",
+  "taxType": "exclusive",
+  "discountType": "percentage",
+  "discountValue": 5,
+  "shipping": 100,
+  "roundOff": true,
+  "showHSN": true,
+  "showUnit": true,
+  "showSignature": false,
+  "purchaseType": "goods",
+  "priority": "medium",
+  "items": [
+    {
+      "itemId": "67829f123456789012345679",
+      "name": "Office Chair",
+      "hsn": "94013100",
+      "unit": "pcs",
+      "quantity": 10,
+      "rate": 2500,
+      "discount": 100,
+      "discountType": "flat",
+      "taxType": "cgst_sgst",
+      "taxRate": 18,
+      "cess": [
+        {
+          "name": "Environment Cess",
+          "rate": 1
+        }
+      ]
+    },
+    {
+      "name": "Office Desk",
+      "hsn": "94036000",
+      "unit": "pcs",
+      "quantity": 5,
+      "rate": 15000,
+      "discount": 5,
+      "discountType": "percentage",
+      "taxType": "igst",
+      "taxRate": 18
+    }
+  ],
+  "phases": [
+    {
+      "title": "Advance Payment",
+      "percentage": 30,
+      "dueDate": "2025-01-15"
+    },
+    {
+      "title": "Delivery Payment",
+      "percentage": 70,
+      "dueDate": "2025-02-01"
+    }
+  ],
+  "terms": "Payment within 30 days of delivery",
+  "notes": "Urgent requirement for new office setup"
+}
+
+### Get all purchases with filters
+GET {{baseUrl}}?page=1&limit=10&sortBy=billDate&sortOrder=desc&paymentStatus=pending
+Authorization: Bearer {{authToken}}
+
+### Search purchases
+GET {{baseUrl}}/search?search=office&vendorId=67829f123456789012345678&startDate=2025-01-01&endDate=2025-01-31
+Authorization: Bearer {{authToken}}
+
+### Get purchase statistics
+GET {{baseUrl}}/stats?period=30
+Authorization: Bearer {{authToken}}
+
+### Get pending purchases for dashboard
+GET {{baseUrl}}/pending?limit=5
+Authorization: Bearer {{authToken}}
+
+### Get purchases summary for date range
+GET {{baseUrl}}/summary?startDate=2025-01-01&endDate=2025-01-31
+Authorization: Bearer {{authToken}}
+
+### Get purchases by vendor
+GET {{baseUrl}}/vendor/67829f123456789012345678?page=1&limit=10
+Authorization: Bearer {{authToken}}
+
+### Get purchase by ID
+GET {{baseUrl}}/67829f123456789012345680
+Authorization: Bearer {{authToken}}
+
+### Update purchase
+PUT {{baseUrl}}/67829f123456789012345680
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "billNumber": "PO-2025-001-UPDATED",
+  "priority": "high",
+  "notes": "Updated: High priority due to urgent requirement",
+  "items": [
+    {
+      "itemId": "67829f123456789012345679",
+      "name": "Office Chair - Premium",
+      "hsn": "94013100",
+      "unit": "pcs",
+      "quantity": 12,
+      "rate": 2800,
+      "discount": 100,
+      "discountType": "flat",
+      "taxType": "cgst_sgst",
+      "taxRate": 18,
+      "receivedQuantity": 5
+    }
+  ]
+}
+
+### Update payment status
+PATCH {{baseUrl}}/67829f123456789012345680/payment-status
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "paymentStatus": "partial",
+  "paidAmount": 15000
+}
+
+### Update delivery status (received quantities)
+PATCH {{baseUrl}}/67829f123456789012345680/delivery-status
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "items": [
+    {
+      "itemId": "67829f123456789012345679",
+      "receivedQuantity": 8
+    },
+    {
+      "_id": "67829f123456789012345681",
+      "receivedQuantity": 3
+    }
+  ]
+}
+
+### Update purchase priority
+PATCH {{baseUrl}}/67829f123456789012345680/priority
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "priority": "urgent"
+}
+
+### Duplicate purchase
+POST {{baseUrl}}/67829f123456789012345680/duplicate
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "billNumber": "PO-2025-002",
+  "billDate": "2025-01-15"
+}
+
+### Add attachment to purchase
+POST {{baseUrl}}/67829f123456789012345680/attachments
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "url": "https://example.com/purchase-invoice.pdf"
+}
+
+### Remove attachment from purchase
+DELETE {{baseUrl}}/67829f123456789012345680/attachments/0
+Authorization: Bearer {{authToken}}
+
+### Delete purchase
+DELETE {{baseUrl}}/67829f123456789012345680
+Authorization: Bearer {{authToken}}
+
+### Error Testing
+
+### Create purchase with invalid data
+POST {{baseUrl}}
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "vendorId": "invalid-id",
+  "billNumber": "",
+  "billDate": "invalid-date",
+  "items": []
+}
+
+### Update non-existent purchase
+PUT {{baseUrl}}/67829f123456789012345999
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "billNumber": "PO-2025-999"
+}
+
+### Get non-existent purchase
+GET {{baseUrl}}/67829f123456789012345999
+Authorization: Bearer {{authToken}}
+
+### Update payment with invalid amount
+PATCH {{baseUrl}}/67829f123456789012345680/payment-status
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "paymentStatus": "paid",
+  "paidAmount": 999999
+}

@@ -1,0 +1,177 @@
+### Delivery Challan API Tests
+
+@baseURL = http://localhost:5000/api
+@authToken = Bearer YOUR_AUTH_TOKEN_HERE
+
+### 1. Create a new delivery challan
+POST {{baseURL}}/finance/sales/delivery-challans
+Authorization: {{authToken}}
+Content-Type: application/json
+
+{
+  "clientId": "676b8f8e12345678901234567",
+  "date": "2025-01-31",
+  "taxType": "exclusive",
+  "discountType": "flat",
+  "discountValue": 100,
+  "shipping": 50,
+  "roundOff": true,
+  "showHSN": true,
+  "showUnit": true,
+  "showSignature": false,
+  "items": [
+    {
+      "name": "Product A",
+      "hsn": "1001",
+      "unit": "PCS",
+      "quantity": 10,
+      "rate": 100,
+      "discount": 5,
+      "discountType": "flat",
+      "taxType": "cgst_sgst",
+      "taxRate": 18
+    },
+    {
+      "name": "Product B",
+      "hsn": "1002",
+      "unit": "KG",
+      "quantity": 5,
+      "rate": 200,
+      "discount": 10,
+      "discountType": "percentage",
+      "taxType": "igst",
+      "taxRate": 12
+    }
+  ],
+  "terms": "Delivery within 7 days",
+  "notes": "Handle with care",
+  "status": "draft"
+}
+
+### 2. Get all delivery challans with pagination
+GET {{baseURL}}/finance/sales/delivery-challans?page=1&limit=10&sortBy=createdAt&sortOrder=desc
+Authorization: {{authToken}}
+
+### 3. Get delivery challan by ID
+GET {{baseURL}}/finance/sales/delivery-challans/676b8f8e12345678901234567
+Authorization: {{authToken}}
+
+### 4. Update delivery challan
+PUT {{baseURL}}/finance/sales/delivery-challans/676b8f8e12345678901234567
+Authorization: {{authToken}}
+Content-Type: application/json
+
+{
+  "notes": "Updated notes - urgent delivery",
+  "shipping": 75,
+  "status": "draft"
+}
+
+### 5. Update delivery challan status
+PATCH {{baseURL}}/finance/sales/delivery-challans/676b8f8e12345678901234567/status
+Authorization: {{authToken}}
+Content-Type: application/json
+
+{
+  "status": "sent"
+}
+
+### 6. Preview delivery challan number
+GET {{baseURL}}/finance/sales/delivery-challans/preview-number
+Authorization: {{authToken}}
+
+### 7. Search delivery challans
+GET {{baseURL}}/finance/sales/delivery-challans/search?search=Product&status=draft&page=1&limit=5
+Authorization: {{authToken}}
+
+### 8. Get delivery challan statistics
+GET {{baseURL}}/finance/sales/delivery-challans/stats?period=30
+Authorization: {{authToken}}
+
+### 9. Duplicate delivery challan
+POST {{baseURL}}/finance/sales/delivery-challans/676b8f8e12345678901234567/duplicate
+Authorization: {{authToken}}
+
+### 10. Create delivery challan from quotation
+POST {{baseURL}}/finance/sales/delivery-challans/from-quotation/676b8f8e12345678901234567
+Authorization: {{authToken}}
+Content-Type: application/json
+
+{
+  "date": "2025-01-31",
+  "notes": "Created from quotation"
+}
+
+### 11. Convert delivery challan to invoice
+POST {{baseURL}}/finance/sales/delivery-challans/676b8f8e12345678901234567/convert-to-invoice
+Authorization: {{authToken}}
+Content-Type: application/json
+
+{
+  "invoiceTitle": "Invoice for Delivery",
+  "dueDate": "2025-02-15",
+  "notes": "Payment due on delivery",
+  "terms": "Net 15 days"
+}
+
+### 12. Bulk actions - Mark as delivered
+POST {{baseURL}}/finance/sales/delivery-challans/bulk-actions
+Authorization: {{authToken}}
+Content-Type: application/json
+
+{
+  "action": "mark_delivered",
+  "deliveryChallanIds": [
+    "676b8f8e12345678901234567",
+    "676b8f8e12345678901234568"
+  ]
+}
+
+### 13. Bulk actions - Send delivery challans
+POST {{baseURL}}/finance/sales/delivery-challans/bulk-actions
+Authorization: {{authToken}}
+Content-Type: application/json
+
+{
+  "action": "send",
+  "deliveryChallanIds": [
+    "676b8f8e12345678901234567",
+    "676b8f8e12345678901234568"
+  ]
+}
+
+### 14. Bulk actions - Delete delivery challans
+POST {{baseURL}}/finance/sales/delivery-challans/bulk-actions
+Authorization: {{authToken}}
+Content-Type: application/json
+
+{
+  "action": "delete",
+  "deliveryChallanIds": [
+    "676b8f8e12345678901234567"
+  ]
+}
+
+### 15. Delete delivery challan
+DELETE {{baseURL}}/finance/sales/delivery-challans/676b8f8e12345678901234567
+Authorization: {{authToken}}
+
+### 16. Filter by status
+GET {{baseURL}}/finance/sales/delivery-challans?status=delivered&page=1&limit=10
+Authorization: {{authToken}}
+
+### 17. Filter by client
+GET {{baseURL}}/finance/sales/delivery-challans?clientId=676b8f8e12345678901234567&page=1&limit=10
+Authorization: {{authToken}}
+
+### 18. Filter by date range
+GET {{baseURL}}/finance/sales/delivery-challans?dateFrom=2025-01-01&dateTo=2025-01-31&page=1&limit=10
+Authorization: {{authToken}}
+
+### 19. Filter converted to invoice
+GET {{baseURL}}/finance/sales/delivery-challans?convertedToInvoice=false&page=1&limit=10
+Authorization: {{authToken}}
+
+### 20. Complex search with multiple filters
+GET {{baseURL}}/finance/sales/delivery-challans/search?search=urgent&status=sent&clientId=676b8f8e12345678901234567&dateFrom=2025-01-01&convertedToInvoice=false&sortBy=date&sortOrder=desc&page=1&limit=10
+Authorization: {{authToken}}

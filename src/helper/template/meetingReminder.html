@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meeting Reminder</title>
+<style>
+  body { font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; }
+  .container { max-width: 600px; margin: 20px auto; background: #fff; border-radius: 8px; padding: 20px; }
+  h1 { color: #007bff; font-size: 24px; }
+  p { color: #333; font-size: 16px; }
+  .details { background: #e9ecef; padding: 10px; border-radius: 6px; margin: 10px 0; }
+  .footer { font-size: 12px; color: #666; margin-top: 20px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>{{statusEmoji}} {{statusText}} Meeting Reminder</h1>
+  <p><strong>Title:</strong> {{title}}</p>
+  <p><strong>From:</strong> {{fromDateTime}}</p>
+  <p><strong>To:</strong> {{toDateTime}}</p>
+  <p><strong>Host:</strong> {{host}}</p>
+  <p><strong>Location:</strong> {{location}}</p>
+  <div class="details">
+    <p><strong>Notes:</strong> {{notes}}</p>
+    <p><strong>Participants:</strong> {{participants}}</p>
+  </div>
+  <p class="footer">© {{year}} Your Company Name. All rights reserved.</p>
+</div>
+</body>
+</html>

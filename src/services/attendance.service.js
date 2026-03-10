@@ -1,0 +1,584 @@
+// services/attendance.service.js
+import Attendance from "../models/attendance.model.js";
+import User from "../models/user.model.js";
+import { AppError } from "../errors/customError.js";
+import { getAddressFromCoords } from "../utils/locationUtils.js";
+import Visit from '../models/visit.model.js'
+import mongoose from "mongoose";
+
+
+
+/* ================= PUNCH IN ================= */
+// services/attendance.service.js
+
+export const punchInService = async (data, currentUser, files = []) => {
+  try {
+    const { latitude, longitude } = data;
+
+    if (!latitude || !longitude) {
+      throw new AppError("Location coordinates are required for punch in", 400);
+    }
+
+    /* ===============================
+       CHECK TODAY ATTENDANCE
+    =============================== */
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const existingAttendance = await Attendance.findOne({
+      user: currentUser._id,
+      date: { $gte: today, $lt: tomorrow }
+    });
+
+    if (existingAttendance?.punchIn?.time) {
+      throw new AppError("Already punched in today", 400);
+    }
+
+    /* ===============================
+       GET ADDRESS
+    =============================== */
+
+    let address = "Address not available";
+
+    if (latitude && longitude) {
+      const geoAddress = await getAddressFromCoords(
+        parseFloat(latitude),
+        parseFloat(longitude)
+      );
+
+      if (geoAddress) address = geoAddress;
+    }
+
+    /* ===============================
+       PUNCH IN DATA
+    =============================== */
+
+    const punchInData = {
+      time: new Date(),
+      location: {
+        lat: parseFloat(latitude),
+        lng: parseFloat(longitude)
+      },
+      address
+    };
+
+    let attendance;
+
+    if (existingAttendance) {
+      existingAttendance.punchIn = punchInData;
+      existingAttendance.status = "present";
+      await existingAttendance.save();
+
+      attendance = existingAttendance;
+    } else {
+      attendance = await Attendance.create({
+        user: currentUser._id,
+        date: new Date(),
+        punchIn: punchInData,
+        status: "present",
+        workHours: 0,
+        overtime: 0
+      });
+    }
+
+    /* ===============================
+       CREATE FIRST VISIT (START POINT)
+    =============================== */
+
+    const firstVisit = await Visit.create({
+      user: currentUser._id,
+      attendance: attendance._id,
+      locationName: "Start Location",
+      address,
+      coordinates: {
+        lat: parseFloat(latitude),
+        lng: parseFloat(longitude)
+      },
+      status: "InProgress",
+      checkInTime: new Date(),
+      checkOutTime: new Date(),
+      visitDate: new Date(),
+      timeSpentMinutes: 0,
+      distanceFromPreviousKm: 0,
+      totalDistanceTillNowKm: 0,
+      travelTimeMinutes: 0
+    });
+
+    /* ===============================
+       RETURN DATA
+    =============================== */
+
+    const populatedAttendance = await Attendance.findById(attendance._id)
+      .populate("user", "firstName lastName email phone");
+
+    return {
+      attendance: populatedAttendance,
+      firstVisit
+    };
+
+  } catch (error) {
+    console.error("Punch In Service Error:", error);
+
+    if (error instanceof AppError) throw error;
+
+    throw new AppError(error.message || "Failed to punch in", 500);
+  }
+};
+
+
+/* ================= PUNCH OUT ================= */
+export const punchOutService = async (data, currentUser, files = []) => {
+    try {
+        const { latitude, longitude } = data;
+
+        // Validate location
+        if (!latitude || !longitude) {
+            throw new AppError("Location coordinates are required for punch out", 400);
+        }
+
+        // Get today's attendance
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        const attendance = await Attendance.findOne({
+            user: currentUser._id,
+            date: {
+                $gte: today,
+                $lt: tomorrow
+            }
+        });
+
+        if (!attendance) {
+            throw new AppError("No punch-in record found for today", 404);
+        }
+
+        if (!attendance.punchIn || !attendance.punchIn.time) {
+            throw new AppError("Please punch in first", 400);
+        }
+
+        if (attendance.punchOut && attendance.punchOut.time) {
+            throw new AppError("Already punched out today", 400);
+        }
+
+        // Get address from coordinates
+        let address = null;
+        if (latitude && longitude) {
+            address = await getAddressFromCoords(parseFloat(latitude), parseFloat(longitude));
+        }
+
+        // Calculate work hours
+        const punchOutTime = new Date();
+        const workMs = punchOutTime - new Date(attendance.punchIn.time);
+        const workHours = Number((workMs / (1000 * 60 * 60)).toFixed(2));
+
+        attendance.punchOut = {
+            time: punchOutTime,
+            location: {
+                lat: parseFloat(latitude),
+                lng: parseFloat(longitude)
+            },
+            address: address || "Address not available",
+        };
+        attendance.workHours = workHours;
+
+        // Calculate overtime (if more than 8 hours)
+        if (workHours > 8) {
+            attendance.overtime = Number((workHours - 8).toFixed(2));
+        }
+
+        await attendance.save();
+
+        return await Attendance.findById(attendance._id)
+            .populate('user', 'name email employeeId phone');
+
+    } catch (error) {
+        console.error('Punch Out Service Error:', error);
+        if (error instanceof AppError) throw error;
+        throw new AppError(error.message || "Failed to punch out", 500);
+    }
+};
+
+
+
+/* ================= GET ALL ATTENDANCE ================= */
+export const getAllAttendanceService = async (query, currentUser) => {
+    try {
+        const {
+            page = 1,
+            limit = 10,
+            sortBy = 'date',
+            sortOrder = 'desc',
+            userId,
+            status,
+            startDate,
+            endDate,
+            minWorkHours,
+            maxWorkHours,
+            hasPunchIn,
+            hasPunchOut,
+            search,
+            ...filters
+        } = query;
+
+        // Build filter
+        const filter = { ...filters };
+
+        // Role-based filtering
+        if (currentUser.role === 'TEAM') {
+            filter.user = currentUser._id;
+        } else if (userId) {
+            filter.user = userId;
+        }
+
+        // Status filter
+        if (status) {
+            if (Array.isArray(status)) {
+                filter.status = { $in: status };
+            } else {
+                filter.status = status;
+            }
+        }
+
+        // Date range filter
+        if (startDate || endDate) {
+            filter.date = {};
+            if (startDate) {
+                const start = new Date(startDate);
+                start.setHours(0, 0, 0, 0);
+                filter.date.$gte = start;
+            }
+            if (endDate) {
+                const end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+                filter.date.$lte = end;
+            }
+        }
+
+        // Work hours filter
+        if (minWorkHours || maxWorkHours) {
+            filter.workHours = {};
+            if (minWorkHours) filter.workHours.$gte = parseFloat(minWorkHours);
+            if (maxWorkHours) filter.workHours.$lte = parseFloat(maxWorkHours);
+        }
+
+        // Punch in/out presence filters
+        if (hasPunchIn === 'true') {
+            filter['punchIn.time'] = { $exists: true };
+        } else if (hasPunchIn === 'false') {
+            filter['punchIn.time'] = { $exists: false };
+        }
+
+        if (hasPunchOut === 'true') {
+            filter['punchOut.time'] = { $exists: true };
+        } else if (hasPunchOut === 'false') {
+            filter['punchOut.time'] = { $exists: false };
+        }
+
+        // Search by user name or remarks
+        if (search) {
+            const users = await User.find({
+                $or: [
+                    { name: { $regex: search, $options: 'i' } },
+                    { email: { $regex: search, $options: 'i' } },
+                ]
+            }).select('_id');
+
+            const userIds = users.map(u => u._id);
+
+            filter.$or = [
+                { user: { $in: userIds } },
+                { 'punchIn.remarks': { $regex: search, $options: 'i' } },
+                { 'punchOut.remarks': { $regex: search, $options: 'i' } }
+            ];
+        }
+
+        // Pagination
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        const sort = { [sortBy]: sortOrder === 'desc' ? -1 : 1 };
+
+        const attendances = await Attendance.find(filter)
+            .populate('user', 'firstName lastName email phoneNumber role')
+            .sort(sort)
+            .skip(skip)
+            .limit(parseInt(limit));
+
+        const total = await Attendance.countDocuments(filter);
+
+        // Get summary statistics
+        const stats = await Attendance.aggregate([
+            { $match: filter },
+            {
+                $group: {
+                    _id: null,
+                    totalWorkHours: { $sum: '$workHours' },
+                    avgWorkHours: { $avg: '$workHours' },
+                    totalOvertime: { $sum: '$overtime' },
+                    avgOvertime: { $avg: '$overtime' },
+
+                    presentCount: {
+                        $sum: { $cond: [{ $eq: ['$status', 'present'] }, 1, 0] }
+                    },
+                    absentCount: {
+                        $sum: { $cond: [{ $eq: ['$status', 'absent'] }, 1, 0] }
+                    },
+                    halfDayCount: {
+                        $sum: { $cond: [{ $eq: ['$status', 'half-day'] }, 1, 0] }
+                    },
+                    leaveCount: {
+                        $sum: { $cond: [{ $eq: ['$status', 'leave'] }, 1, 0] }
+                    },
+                    holidayCount: {
+                        $sum: { $cond: [{ $eq: ['$status', 'holiday'] }, 1, 0] }
+                    }
+                }
+            }
+        ]);
+
+        const formatMinutes = (minutes = 0) => {
+            const hrs = Math.floor(minutes / 60);
+            const mins = minutes % 60;
+            return `${hrs.toString().padStart(2, "0")}:${mins
+                .toString()
+                .padStart(2, "0")}`;
+        };
+
+        const formattedAttendances = attendances.map(att => ({
+            id: att._id,
+
+            user: {
+                id: att.user?._id,
+                firstName: att.user?.firstName || null,
+                lastName: att.user?.lastName || null,
+                email: att.user?.email,
+                phone: att.user?.phoneNumber || null,
+                role: att.user?.role
+            },
+
+            date: att.date,
+
+            punchIn: att.punchIn?.time
+                ? {
+                    time: att.punchIn.time,
+                    address: att.punchIn.address,
+                    location: att.punchIn.location
+                }
+                : null,
+
+            punchOut: att.punchOut?.time
+                ? {
+                    time: att.punchOut.time,
+                    address: att.punchOut.address,
+                    location: att.punchOut.location
+                }
+                : null,
+
+            workHours: att.workHours,
+            workHoursFormatted: formatMinutes(att.workHours),
+
+            overtime: att.overtime,
+
+            status: att.status,
+
+            createdAt: att.createdAt,
+            updatedAt: att.updatedAt
+        }));
+
+        return {
+            attendances: formattedAttendances,
+            pagination: {
+                currentPage: parseInt(page),
+                totalPages: Math.ceil(total / parseInt(limit)),
+                totalItems: total,
+                itemsPerPage: parseInt(limit)
+            },
+            summary: {
+                totalWorkHours: stats[0]?.totalWorkHours || 0,
+                avgWorkHours: stats[0]?.avgWorkHours || 0,
+                totalOvertime: stats[0]?.totalOvertime || 0,
+                avgOvertime: stats[0]?.avgOvertime || 0,
+                presentCount: stats[0]?.presentCount || 0,
+                absentCount: stats[0]?.absentCount || 0,
+                halfDayCount: stats[0]?.halfDayCount || 0,
+                leaveCount: stats[0]?.leaveCount || 0,
+                holidayCount: stats[0]?.holidayCount || 0
+            }
+        };
+
+    } catch (error) {
+        throw new AppError(error.message || "Failed to fetch attendance records", 500);
+    }
+};
+
+/* ================= GET ATTENDANCE BY ID ================= */
+export const getAttendanceByIdService = async (attendanceId) => {
+    try {
+        const attendance = await Attendance.findById(attendanceId)
+            .populate('user', 'firstName lastName email _id phoneNumber role');
+
+        if (!attendance) {
+            throw new AppError("Attendance record not found", 404);
+        }
+
+        return attendance;
+    } catch (error) {
+        throw new AppError(error.message || "Failed to fetch attendance record", 500);
+    }
+};
+
+
+/* ================= UPDATE ATTENDANCE ================= */
+export const updateAttendanceService = async (attendanceId, data, currentUser) => {
+    try {
+        // Only admin/manager can update attendance
+        if (!['Head_office', 'ZSM', 'ASM'].includes(currentUser.role)) {
+            throw new AppError("Unauthorized to update attendance records", 403);
+        }
+
+        const attendance = await Attendance.findById(attendanceId);
+        if (!attendance) {
+            throw new AppError("Attendance record not found", 404);
+        }
+
+        // Update fields
+        if (data.status) attendance.status = data.status;
+        if (data.workHours !== undefined) attendance.workHours = data.workHours;
+        if (data.overtime !== undefined) attendance.overtime = data.overtime;
+
+        // Update punch in/out if provided
+        if (data.punchIn) {
+            attendance.punchIn = {
+                ...attendance.punchIn,
+                ...data.punchIn
+            };
+        }
+
+        if (data.punchOut) {
+            attendance.punchOut = {
+                ...attendance.punchOut,
+                ...data.punchOut
+            };
+        }
+
+        if (data.metadata) {
+            attendance.metadata = {
+                ...attendance.metadata,
+                ...data.metadata
+            };
+        }
+        attendance.remarks = data.remarks;
+        await attendance.save();
+
+        return await Attendance.findById(attendance._id)
+            .populate('user', 'firstName lastName email _id phoneNumber');
+
+    } catch (error) {
+        throw new AppError(error.message || "Failed to update attendance", 500);
+    }
+};
+
+/* ================= DELETE ATTENDANCE ================= */
+export const deleteAttendanceService = async (attendanceId, currentUser) => {
+    try {
+        // Only admin can delete attendance
+        if (!['Head_office'].includes(currentUser.role)) {
+            throw new AppError("Unauthorized to delete attendance records", 403);
+        }
+
+        const attendance = await Attendance.findByIdAndDelete(attendanceId);
+        if (!attendance) {
+            throw new AppError("Attendance record not found", 404);
+        }
+
+        return { message: "Attendance record deleted successfully" };
+    } catch (error) {
+        throw new AppError(error.message || "Failed to delete attendance", 500);
+    }
+};
+
+/* ================= GET ATTENDANCE STATS ================= */
+export const getAttendanceStatsService = async (query, currentUser) => {
+    try {
+        const { userId, startDate, endDate, groupBy = 'day' } = query;
+
+        const matchStage = {};
+
+        if (userId && ['Head_office', 'ZSM', 'ASM'].includes(currentUser.role)) {
+            matchStage.user = new mongoose.Types.ObjectId(userId);
+        } else if (currentUser.role === 'TEAM') {
+            matchStage.user = new mongoose.Types.ObjectId(currentUser._id);
+        }
+
+        if (startDate || endDate) {
+            matchStage.date = {};
+            if (startDate) matchStage.date.$gte = new Date(startDate);
+            if (endDate) matchStage.date.$lte = new Date(endDate);
+        }
+
+        let groupId;
+        if (groupBy === 'day') {
+            groupId = { $dateToString: { format: '%Y-%m-%d', date: '$date' } };
+        } else if (groupBy === 'week') {
+            groupId = { $week: '$date' };
+        } else if (groupBy === 'month') {
+            groupId = { $month: '$date' };
+        } else if (groupBy === 'user') {
+            groupId = '$user';
+        }
+
+        const stats = await Attendance.aggregate([
+            { $match: matchStage },
+            {
+                $group: {
+                    _id: groupId,
+                    count: { $sum: 1 },
+                    presentCount: {
+                        $sum: { $cond: [{ $eq: ['$status', 'Present'] }, 1, 0] }
+                    },
+                    absentCount: {
+                        $sum: { $cond: [{ $eq: ['$status', 'Absent'] }, 1, 0] }
+                    },
+                    halfDayCount: {
+                        $sum: { $cond: [{ $eq: ['$status', 'Half-Day'] }, 1, 0] }
+                    },
+                    leaveCount: {
+                        $sum: { $cond: [{ $eq: ['$status', 'Leave'] }, 1, 0] }
+                    },
+                    holidayCount: {
+                        $sum: { $cond: [{ $eq: ['$status', 'Holiday'] }, 1, 0] }
+                    },
+                    totalWorkHours: { $sum: '$workHours' },
+                    avgWorkHours: { $avg: '$workHours' },
+                    totalOvertime: { $sum: '$overtime' },
+                    avgOvertime: { $avg: '$overtime' }
+                }
+            },
+            { $sort: { '_id': -1 } }
+        ]);
+
+        // If grouping by user, populate user details
+        if (groupBy === 'user' && stats.length > 0) {
+            const userIds = stats.map(s => s._id);
+            const users = await User.find({ _id: { $in: userIds } })
+                .select('name email employeeId');
+
+            const userMap = {};
+            users.forEach(u => {
+                userMap[u._id] = u;
+            });
+
+            stats.forEach(s => {
+                s.user = userMap[s._id] || null;
+            });
+        }
+
+        return stats;
+    } catch (error) {
+        throw new AppError(error.message || "Failed to fetch attendance stats", 500);
+    }
+};

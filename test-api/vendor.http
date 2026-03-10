@@ -1,0 +1,287 @@
+@token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2ODg3MjI1MzZkNmU3MjA3MDQ5NGNmMjIiLCJpYXQiOjE3NTM3NjU0ODQsImV4cCI6MTc1MzgwODY4NH0.m2z0raVJwRdQvlKIkDJ3mMNSL8K3iysj8s8PkW8vbeU
+@url=http://localhost:8000/api/v1/finance/purchases/vendor
+@companyId=68872696ead9793e17acaccc
+@vendorId=688863093369f2230ac4342c
+
+@vendorId1=688863093369f2230ac4342c
+@vendorId2=688863093369f2230ac4342d
+
+
+### Create Vendor
+POST {{url}}/createVendor
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "Electronics Supplier",
+  "displayName": "ABC Electronics",
+  "vendorType": "Manufacturer",
+  "industry": "Electronics",
+  "email": "contact1@abcelectronics.com",
+  "showEmail": true,
+  "phone": "9876543211",
+  "contact": "John Smith",
+  "showPhone": true,
+  "gstin": "07AAECI2986L1ZF",
+  "gstType": "Regular",
+  "panNumber": "AAECI2986L",
+  "taxTreatment": "Registered Business",
+  "address": {
+    "country": "India",
+    "state": "Odisha",
+    "city": "Rourkela",
+    "postalCode": "769007",
+    "streetAddress": "Civil township, Sector 5"
+  }
+  "bankAccounts": [
+    {
+      "bankName": "State Bank of India",
+      "accountNumber": "1234567890123456",
+      "ifsc": "SBIN0001234",
+      "branch": "Nehru Place",
+      "accountType": "Current"
+    }
+  ],
+  "attachments": [
+    {
+      "name": "GST Certificate",
+      "url": "https://example.com/gst-certificate.pdf"
+    },
+    {
+      "name": "PAN Card",
+      "url": "https://example.com/pan-card.pdf"
+    }
+  ]
+}
+
+### Create Another Vendor
+POST {{url}}/createVendor
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "XYZ Suppliers",
+  "displayName": "XYZ Suppliers",
+  "vendorType": "Distributor",
+  "industry": "General Trading",
+  "email": "info@xyzsuppliers.com",
+  "showEmail": true,
+  "phone": "9876543212",
+  "contact": "Jane Doe",
+  "showPhone": true,
+  "gstin": "27AABCT1332L2ZG",
+  "gstType": "Regular",
+  "panNumber": "AABCT1332L",
+  "taxTreatment": "Registered Business",
+  "address": {
+    "country": "India",
+    "state": "Maharashtra",
+    "city": "Mumbai",
+    "postalCode": "400001",
+    "streetAddress": "456, Trade Center, Andheri East"
+  },
+  "bankAccounts": [
+    {
+      "bankName": "HDFC Bank",
+      "accountNumber": "9876543210987654",
+      "ifsc": "HDFC0001234",
+      "branch": "Andheri East",
+      "accountType": "Current"
+    }
+  ]
+}
+
+### Create Vendor with Minimal Data
+POST {{url}}/createVendor
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "Quick Vendor",
+  "email": "vendor2@gmail.com",
+  "phone": "9876543215",
+  "taxTreatment": "Unregistered Business"
+}
+
+### Get All Vendors
+GET {{url}}/getAllVendors/{{companyId}}
+Authorization: Bearer {{token}}
+
+### Get All Vendors with Pagination and Filters
+GET {{url}}/getAllVendors/{{companyId}}?page=1&limit=5&sortBy=name&sortOrder=asc&name=ABC&industry=Electronics
+Authorization: Bearer {{token}}
+
+### Get Vendor Details
+GET {{url}}/vendorDetails/{{companyId}}/{{vendorId}}
+Authorization: Bearer {{token}}
+
+### Update Vendor
+PUT {{url}}/updateVendorDetails/{{companyId}}/688863093369f2230ac4342c
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "displayName": "ABC Electronics Updated",
+  "phone": "9876543299",
+  "email": "updated@abcelectronics.com",
+  "address": {
+    "country": "India",
+    "state": "Delhi",
+    "city": "New Delhi",
+    "postalCode": "110002",
+    "streetAddress": "789, Updated Address, Nehru Place"
+  },
+  "bankAccounts": [
+    {
+      "bankName": "State Bank of India",
+      "accountNumber": "1234567890123456",
+      "ifsc": "SBIN0001234",
+      "branch": "Nehru Place",
+      "accountType": "Current"
+    },
+    {
+      "bankName": "ICICI Bank",
+      "accountNumber": "5555666677778888",
+      "ifsc": "ICIC0001234",
+      "branch": "CP Branch",
+      "accountType": "Savings"
+    }
+  ]
+}
+
+### Update Vendor - Add Attachments
+PUT {{url}}/updateVendorDetails/{{companyId}}/{{vendorId}}
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "attachments": [
+    {
+      "name": "GST Certificate",
+      "url": "https://example.com/gst-certificate.pdf"
+    },
+    {
+      "name": "PAN Card",
+      "url": "https://example.com/pan-card.pdf"
+    },
+    {
+      "name": "Bank Statement",
+      "url": "https://example.com/bank-statement.pdf"
+    }
+  ]
+}
+
+### Search Vendors
+GET {{url}}/searchVendors/{{companyId}}?q=ABC
+Authorization: Bearer {{token}}
+
+### Search Vendors by Phone
+GET {{url}}/searchVendors/{{companyId}}?q=9876543211
+Authorization: Bearer {{token}}
+
+### Search Vendors by Email
+GET {{url}}/searchVendors/{{companyId}}?q=contact1@abcelectronics.com
+Authorization: Bearer {{token}}
+
+### Search Vendors by Industry
+GET {{url}}/searchVendors/{{companyId}}?q=Electronics
+Authorization: Bearer {{token}}
+
+### Delete Vendor
+DELETE {{url}}/deleteVendor/{{companyId}}/{{vendorId}}
+Authorization: Bearer {{token}}
+
+### Bulk Delete Vendors
+DELETE {{url}}/bulkDeleteVendors/{{companyId}}
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "vendorIds": ["{{vendorId1}}", "{{vendorId2}}"]
+}
+
+### Test Validation - Create Vendor with Invalid Email
+POST {{url}}/createVendor
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "Test Vendor",
+  "email": "invalid-email"
+}
+
+### Test Validation - Create Vendor with Invalid GSTIN
+POST {{url}}/createVendor
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "Test Vendor",
+  "gstin": "INVALID-GSTIN"
+}
+
+### Test Validation - Create Vendor with Invalid PAN
+POST {{url}}/createVendor
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "Test Vendor",
+  "panNumber": "INVALID-PAN"
+}
+
+### Test Validation - Create Vendor with Invalid IFSC
+POST {{url}}/createVendor
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "Test Vendor",
+  "bankAccounts": [
+    {
+      "bankName": "Test Bank",
+      "accountNumber": "1234567890",
+      "ifsc": "INVALID-IFSC"
+    }
+  ]
+}
+
+### Test Validation - Create Vendor with Invalid Tax Treatment
+POST {{url}}/createVendor
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "Test Vendor",
+  "taxTreatment": "Invalid Treatment"
+}
+
+### Test Error - Get Non-existent Vendor
+GET {{url}}/vendorDetails/{{companyId}}/507f1f77bcf86cd799439011
+Authorization: Bearer {{token}}
+
+### Test Error - Update Non-existent Vendor
+PUT {{url}}/updateVendorDetails/{{companyId}}/507f1f77bcf86cd799439011
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "Updated Name"
+}
+
+### Test Error - Delete Non-existent Vendor
+DELETE {{url}}/deleteVendor/{{companyId}}/507f1f77bcf86cd799439011
+Authorization: Bearer {{token}}
+
+### Test Error - Search without Query
+GET {{url}}/searchVendors/{{companyId}}
+Authorization: Bearer {{token}}
+
+### Test Error - Bulk Delete with Invalid Data
+DELETE {{url}}/bulkDeleteVendors/{{companyId}}
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "vendorIds": "not-an-array"
+}

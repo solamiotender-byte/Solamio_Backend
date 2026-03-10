@@ -1,0 +1,403 @@
+### Invoice API Testing
+### Base URL: http://localhost:3000/api/invoices
+
+# Variables
+@baseUrl = http://localhost:8000/api/v1/finance/sales
+@token = Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2ODhiMDliZjc5MjI1NGU3Y2M5NzBmZDAiLCJpYXQiOjE3NTM5NDI0NzUsImV4cCI6MTc1Mzk4NTY3NX0.lvvQJU5EvwRJz0mBSVKhpAkJbgwtJl16rlXb5mdqv8k
+@invoiceId = 
+@quotationId =   
+@proformaInvoiceId = 
+@clientId = 688b0af5792254e7cc970fe0
+
+###############################################
+# AUTHENTICATION & SETUP
+###############################################
+
+### Login to get JWT token
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "password": "password123"
+}
+
+###############################################
+# CORE INVOICE OPERATIONS
+###############################################
+
+### 1. Create a new invoice
+POST {{baseUrl}}/invoices
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "clientId": "{{clientId}}",
+  "invoiceTitle": "Website Development Services",
+  "date": "2025-01-31",
+  "dueDate": "2025-02-28",
+  "taxType": "exclusive",
+  "discountType": "flat",
+  "discountValue": 1000,
+  "shipping": 500,
+  "roundOff": true,
+  "showHSN": true,
+  "showUnit": true,
+  "showSignature": false,
+  "items": [
+    {
+      "name": "Frontend Development",
+      "hsn": "998314",
+      "unit": "Hours",
+      "quantity": 100,
+      "rate": 500,
+      "discount": 0,
+      "discountType": "flat",
+      "taxType": "cgst_sgst",
+      "taxRate": 18,
+      "cess": [
+        {
+          "name": "Education Cess",
+          "rate": 2
+        }
+      ]
+    },
+    {
+      "name": "Backend Development",
+      "hsn": "998314",
+      "unit": "Hours",
+      "quantity": 80,
+      "rate": 600,
+      "discount": 10,
+      "discountType": "percentage",
+      "taxType": "cgst_sgst",
+      "taxRate": 18
+    }
+  ],
+  "terms": "Payment terms: Net 30 days",
+  "notes": "Thank you for your business!",
+  "phases": [
+    {
+      "title": "Project Start",
+      "percentage": 50,
+      "dueDate": "2025-02-15"
+    },
+    {
+      "title": "Project Completion",
+      "percentage": 50,
+      "dueDate": "2025-02-28"
+    }
+  ]
+}
+
+### 2. Get all invoices with pagination
+GET {{baseUrl}}/invoices?page=1&limit=10&sortBy=date&sortOrder=desc
+Authorization: {{token}}
+
+### 3. Get invoice by ID
+GET {{baseUrl}}/invoices/{{invoiceId}}
+Authorization: {{token}}
+
+### 4. Update invoice
+PUT {{baseUrl}}/invoices/{{invoiceId}}
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "invoiceTitle": "Updated Website Development Services",
+  "notes": "Updated notes with additional information",
+  "shipping": 750
+}
+
+### 5. Delete invoice (only draft invoices)
+DELETE {{baseUrl}}/invoices/{{invoiceId}}
+Authorization: {{token}}
+
+###############################################
+# INVOICE STATUS MANAGEMENT
+###############################################
+
+### 6. Update invoice status
+PATCH {{baseUrl}}/invoices/{{invoiceId}}/status
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "status": "sent"
+}
+
+### 7. Duplicate invoice
+POST {{baseUrl}}/invoices/{{invoiceId}}/duplicate
+Authorization: {{token}}
+
+###############################################
+# PAYMENT OPERATIONS
+###############################################
+
+### 8. Record payment
+POST {{baseUrl}}/invoices/{{invoiceId}}/record-payment
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "amount": 25000,
+  "date": "2025-01-31",
+  "method": "bank_transfer",
+  "reference": "TXN123456789",
+  "notes": "Partial payment received for project milestone"
+}
+
+### 9. Record another payment
+POST {{baseUrl}}/invoices/{{invoiceId}}/record-payment
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "amount": 30000,
+  "method": "upi",
+  "reference": "UPI987654321",
+  "notes": "Second installment payment"
+}
+
+### 10. Get payment history
+GET {{baseUrl}}/invoices/{{invoiceId}}/payments
+Authorization: {{token}}
+
+### 11. Mark invoice as paid (quick action)
+PATCH {{baseUrl}}/invoices/{{invoiceId}}/mark-paid
+Authorization: {{token}}
+
+###############################################
+# REPORTING & ANALYTICS
+###############################################
+
+### 12. Get invoice statistics
+GET {{baseUrl}}/invoices/stats?period=30
+Authorization: {{token}}
+
+### 13. Get aging report
+GET {{baseUrl}}/invoices/aging-report
+Authorization: {{token}}
+
+### 14. Get overdue invoices
+GET {{baseUrl}}/invoices/overdue?page=1&limit=10
+Authorization: {{token}}
+
+###############################################
+# SEARCH & FILTERING
+###############################################
+
+### 15. Advanced search
+GET {{baseUrl}}/invoices/search?search=website&status=sent&dateFrom=2025-01-01&dateTo=2025-12-31
+Authorization: {{token}}
+
+### 16. Filter by status
+GET {{baseUrl}}/invoices?status=draft&page=1&limit=5
+Authorization: {{token}}
+
+### 17. Filter by payment status
+GET {{baseUrl}}/invoices?paymentStatus=unpaid&sortBy=dueDate&sortOrder=asc
+Authorization: {{token}}
+
+### 18. Filter by client
+GET {{baseUrl}}/invoices?clientId={{clientId}}&page=1&limit=10
+Authorization: {{token}}
+
+### 19. Filter by date range
+GET {{baseUrl}}/invoices?dateFrom=2025-01-01&dateTo=2025-01-31&sortBy=date&sortOrder=desc
+Authorization: {{token}}
+
+###############################################
+# DOCUMENT CONVERSION
+###############################################
+
+### 20. Generate new invoice number (preview)
+GET {{baseUrl}}/invoices/preview-number
+Authorization: {{token}}
+
+### 21. Create invoice from quotation
+POST {{baseUrl}}/invoices/from-quotation/{{quotationId}}
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "date": "2025-01-31",
+  "dueDate": "2025-02-28"
+}
+
+### 22. Create invoice from proforma invoice
+POST {{baseUrl}}/invoices/from-proforma-invoice/{{proformaInvoiceId}}
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "date": "2025-01-31",
+  "dueDate": "2025-02-28"
+}
+
+###############################################
+# BULK OPERATIONS
+###############################################
+
+### 23. Bulk delete invoices
+POST {{baseUrl}}/invoices/bulk-action
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "action": "delete",
+  "invoiceIds": ["INVOICE_ID_1", "INVOICE_ID_2", "INVOICE_ID_3"]
+}
+
+### 24. Bulk mark as paid
+POST {{baseUrl}}/invoices/bulk-action
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "action": "mark_paid",
+  "invoiceIds": ["INVOICE_ID_1", "INVOICE_ID_2"]
+}
+
+###############################################
+# FUTURE FEATURES (Not Implemented in MVP)
+###############################################
+
+### 25. Send invoice email (Not implemented)
+POST {{baseUrl}}/invoices/{{invoiceId}}/send-email
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "to": "client@example.com",
+  "subject": "Invoice for Website Development",
+  "message": "Please find attached invoice for your recent project."
+}
+
+### 26. Generate shareable link (Not implemented)
+POST {{baseUrl}}/invoices/{{invoiceId}}/generate-link
+Authorization: {{token}}
+
+### 27. Approve invoice (Not implemented)
+POST {{baseUrl}}/invoices/{{invoiceId}}/approve
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "approvalNotes": "Invoice approved for payment"
+}
+
+### 28. Send payment reminder (Not implemented)
+POST {{baseUrl}}/invoices/{{invoiceId}}/send-reminder
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "to": "client@example.com",
+  "subject": "Payment Reminder",
+  "message": "This is a gentle reminder about your pending invoice payment."
+}
+
+### 29. Apply late fee (Not implemented)
+POST {{baseUrl}}/invoices/{{invoiceId}}/apply-late-fee
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "feeAmount": 500,
+  "reason": "Payment overdue by 15 days"
+}
+
+### 30. Create credit note (Not implemented)
+POST {{baseUrl}}/invoices/{{invoiceId}}/credit-note
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "amount": 5000,
+  "reason": "Service not delivered as expected"
+}
+
+###############################################
+# TEST SCENARIOS
+###############################################
+
+### Test Scenario 1: Complete Invoice Lifecycle
+# 1. Create invoice -> 2. Send to client -> 3. Record partial payment -> 4. Record final payment
+
+### Test Scenario 2: Invoice from Quotation Flow
+# 1. Create quotation -> 2. Accept quotation -> 3. Convert to invoice -> 4. Process payment
+
+### Test Scenario 3: Invoice from Proforma Invoice Flow
+# 1. Create PI -> 2. Accept PI -> 3. Convert to invoice -> 4. Process payment
+
+### Test Scenario 4: Overdue Invoice Management
+# 1. Create invoice with past due date -> 2. Check overdue list -> 3. Send reminder -> 4. Apply late fee
+
+### Test Scenario 5: Bulk Operations
+# 1. Create multiple invoices -> 2. Bulk mark some as paid -> 3. Bulk delete draft invoices
+
+###############################################
+# ERROR TESTING
+###############################################
+
+### Test invalid invoice creation (missing required fields)
+POST {{baseUrl}}/invoices
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "invoiceTitle": "Test Invoice"
+  // Missing required fields: clientId, date, dueDate, items
+}
+
+### Test payment amount exceeding balance
+POST {{baseUrl}}/invoices/{{invoiceId}}/record-payment
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "amount": 999999,
+  "method": "cash"
+}
+
+### Test invalid status transition
+PATCH {{baseUrl}}/invoices/{{invoiceId}}/status
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "status": "invalid_status"
+}
+
+### Test duplicate invoice number (should be handled automatically)
+POST {{baseUrl}}/invoices
+Authorization: {{token}}
+Content-Type: application/json
+
+{
+  "clientId": "{{clientId}}",
+  "invoiceNumber": "INV-2025-0001", // Should be auto-generated
+  "invoiceTitle": "Test Duplicate",
+  "date": "2025-01-31",
+  "dueDate": "2025-02-28",
+  "items": [
+    {
+      "name": "Test Item",
+      "quantity": 1,
+      "rate": 1000
+    }
+  ]
+}
+
+###############################################
+# PERFORMANCE TESTING
+###############################################
+
+### Test pagination with large dataset
+GET {{baseUrl}}/invoices?page=1&limit=100&sortBy=createdAt&sortOrder=desc
+Authorization: {{token}}
+
+### Test search with complex filters
+GET {{baseUrl}}/invoices/search?search=development&status=sent&paymentStatus=unpaid&dateFrom=2024-01-01&dateTo=2025-12-31&clientId={{clientId}}
+Authorization: {{token}}

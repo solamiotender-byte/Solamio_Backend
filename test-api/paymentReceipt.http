@@ -1,0 +1,146 @@
+### Payment Receipt API Tests
+
+### Variables
+@baseUrl = http://localhost:8000/api/v1
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2ODhiMDliZjc5MjI1NGU3Y2M5NzBmZDAiLCJpYXQiOjE3NTQwMzMzNzYsImV4cCI6MTc1NDA3NjU3Nn0.GqsRB23mNbAcKE28L3djyj5dVtNtS8kv8MeL5Vmb8JI
+@companyId = 688b0a7d792254e7cc970fda
+@clientId = 688b0af5792254e7cc970fe0
+@invoiceId = 688b1b1797d11e520f79b463
+
+### 1. Create Advance Payment Receipt
+POST {{baseUrl}}/finance/sales/payment-receipts
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "clientId": "{{clientId}}",
+  "receiptDate": "2025-08-01",
+  "paymentType": "Advance",
+  "paymentRecords": [
+    {
+      "paymentMethod": "Bank Transfer",
+      "depositedTo": "Cash",
+      "amountReceived": 5000,
+      "tdsPercent": 0,
+      "tdsWithheldAmount": 0,
+      "transactionCharge": 0,
+      "referenceId": "TXN123456",
+      "notes": "Advance payment for future orders"
+    }
+  ],
+  "attachments": ["receipt_image.jpg"]
+}
+
+### 2. Create Invoice Payment Receipt
+POST {{baseUrl}}/finance/sales/payment-receipts
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "clientId": "{{clientId}}",
+  "receiptDate": "2025-08-01",
+  "paymentType": "Receipt",
+  "paymentRecords": [
+    {
+      "paymentMethod": "UPI",
+      "depositedTo": "Cash",
+      "amountReceived": 1000,
+      "tdsPercent": 2,
+      "tdsWithheldAmount": 200,
+      "transactionCharge": 10,
+      "referenceId": "UPI123456789",
+      "notes": "Payment for invoice INV-2025-0001"
+    }
+  ],
+  "allocations": [
+    {
+      "invoiceId": "{{invoiceId}}",
+      "amount": 1000
+    }
+  ],
+  "attachments": []
+}
+
+### 3. Get All Payment Receipts
+GET {{baseUrl}}/finance/sales/payment-receipts?page=1&limit=10
+Authorization: Bearer {{token}}
+
+### 4. Get Payment Receipts with Filters
+GET {{baseUrl}}/finance/sales/payment-receipts?paymentType=Advance&dateFrom=2025-07-01&dateTo=2025-08-31
+Authorization: Bearer {{token}}
+
+### 5. Search Payment Receipts
+GET {{baseUrl}}/finance/sales/payment-receipts/search?search=TXN123
+Authorization: Bearer {{token}}
+
+### 6. Get Payment Receipt by ID
+GET {{baseUrl}}/finance/sales/payment-receipts/{{receiptId}}
+Authorization: Bearer {{token}}
+
+### 7. Get Payment Receipts by Client
+GET {{baseUrl}}/finance/sales/payment-receipts/client/{{clientId}}
+Authorization: Bearer {{token}}
+
+### 8. Update Payment Receipt
+PUT {{baseUrl}}/finance/sales/payment-receipts/{{receiptId}}
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "paymentRecords": [
+    {
+      "paymentMethod": "Bank Transfer",
+      "depositedTo": "Cash",
+      "amountReceived": 6000,
+      "tdsPercent": 0,
+      "tdsWithheldAmount": 0,
+      "transactionCharge": 0,
+      "referenceId": "TXN123456-UPDATED",
+      "notes": "Updated advance payment amount"
+    }
+  ]
+}
+
+### 9. Get Payment Receipt Statistics
+GET {{baseUrl}}/finance/sales/payment-receipts/stats?period=month
+Authorization: Bearer {{token}}
+
+### 10. Generate Receipt Number Preview
+GET {{baseUrl}}/finance/sales/payment-receipts/preview-number
+Authorization: Bearer {{token}}
+
+### 11. Delete Payment Receipt
+DELETE {{baseUrl}}/finance/sales/payment-receipts/{{receiptId}}
+Authorization: Bearer {{token}}
+
+### Example: Multi-payment Receipt with Allocations
+POST {{baseUrl}}/finance/sales/payment-receipts
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "clientId": "{{clientId}}",
+  "receiptDate": "2025-08-01",
+  "paymentType": "Receipt",
+  "paymentRecords": [
+    {
+      "paymentMethod": "Cash",
+      "depositedTo": "Cash",
+      "amountReceived": 5000,
+      "notes": "Cash payment"
+    },
+    {
+      "paymentMethod": "Bank Transfer",
+      "depositedTo": "Cash",
+      "amountReceived": 3000,
+      "referenceId": "TXN789",
+      "notes": "Bank transfer"
+    }
+  ],
+  "allocations": [
+    {
+      "invoiceId": "{{invoiceId}}",
+      "amount": 8000
+    }
+  ]
+}

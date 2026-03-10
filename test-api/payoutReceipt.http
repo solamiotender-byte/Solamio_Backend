@@ -1,0 +1,130 @@
+### Payout Receipt API Endpoints
+
+# Base URL
+@baseUrl = http://localhost:3000/api
+@authToken = YOUR_JWT_TOKEN_HERE
+
+### 1. Generate Receipt Number
+GET {{baseUrl}}/payout-receipts/generate-number
+Authorization: Bearer {{authToken}}
+
+### 2. Create Payout Receipt (Payment Type - Settling Multiple Purchases)
+POST {{baseUrl}}/payout-receipts
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "companyId": "60d0fe4f5311236168a109ca",
+  "vendorId": "60d0fe4f5311236168a109cb",
+  "receiptDate": "2025-08-04T10:00:00.000Z",
+  "paymentType": "Payment",
+  "paymentRecords": [
+    {
+      "paymentMethod": "Bank Transfer",
+      "paidFrom": "HDFC Current Account",
+      "amountPaid": 45000,
+      "tdsPercent": 2,
+      "tdsDeductedAmount": 1000,
+      "transactionCharge": 50,
+      "referenceId": "TXN123456789",
+      "notes": "Payment for multiple purchase orders"
+    }
+  ],
+  "allocations": [
+    {
+      "purchaseId": "60d0fe4f5311236168a109cc",
+      "amount": 25000
+    },
+    {
+      "purchaseId": "60d0fe4f5311236168a109cd",
+      "amount": 20000
+    }
+  ],
+  "purpose": "Payment for goods received",
+  "internalNotes": "Vendor has good payment history"
+}
+
+### 3. Create Advance Payment Receipt
+POST {{baseUrl}}/payout-receipts
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "companyId": "60d0fe4f5311236168a109ca",
+  "vendorId": "60d0fe4f5311236168a109cb",
+  "receiptDate": "2025-08-04T10:00:00.000Z",
+  "paymentType": "Advance",
+  "paymentRecords": [
+    {
+      "paymentMethod": "UPI",
+      "paidFrom": "Business UPI",
+      "amountPaid": 15000,
+      "tdsPercent": 0,
+      "tdsDeductedAmount": 0,
+      "transactionCharge": 0,
+      "referenceId": "UPI789123456",
+      "notes": "Advance payment for upcoming orders"
+    }
+  ],
+  "allocations": [],
+  "purpose": "Advance payment",
+  "internalNotes": "For future orders"
+}
+
+### 4. Get All Payout Receipts with Filters
+GET {{baseUrl}}/payout-receipts?page=1&limit=10&sortBy=receiptDate&sortOrder=desc&paymentType=Payment&dateFrom=2025-08-01&dateTo=2025-08-31
+Authorization: Bearer {{authToken}}
+
+### 5. Get Payout Receipt by ID
+GET {{baseUrl}}/payout-receipts/60d0fe4f5311236168a109ce
+Authorization: Bearer {{authToken}}
+
+### 6. Update Payout Receipt
+PUT {{baseUrl}}/payout-receipts/60d0fe4f5311236168a109ce
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "purpose": "Updated payment purpose",
+  "internalNotes": "Updated internal notes",
+  "paymentRecords": [
+    {
+      "paymentMethod": "Bank Transfer",
+      "paidFrom": "HDFC Current Account",
+      "amountPaid": 45000,
+      "tdsPercent": 2,
+      "tdsDeductedAmount": 1000,
+      "transactionCharge": 50,
+      "referenceId": "TXN123456789",
+      "notes": "Updated payment notes"
+    }
+  ]
+}
+
+### 7. Delete Payout Receipt
+DELETE {{baseUrl}}/payout-receipts/60d0fe4f5311236168a109ce
+Authorization: Bearer {{authToken}}
+
+### 8. Get Vendor's Pending Purchases
+GET {{baseUrl}}/payout-receipts/vendor/60d0fe4f5311236168a109cb/pending-purchases
+Authorization: Bearer {{authToken}}
+
+### 9. Get Payout Receipt Statistics
+GET {{baseUrl}}/payout-receipts/stats?dateFrom=2025-08-01&dateTo=2025-08-31
+Authorization: Bearer {{authToken}}
+
+### 10. Get Payment Method Breakdown
+GET {{baseUrl}}/payout-receipts/payment-breakdown?dateFrom=2025-08-01&dateTo=2025-08-31
+Authorization: Bearer {{authToken}}
+
+### 11. Search by Receipt Number
+GET {{baseUrl}}/payout-receipts?receiptNumber=PAY-2025-0001
+Authorization: Bearer {{authToken}}
+
+### 12. Filter by Vendor
+GET {{baseUrl}}/payout-receipts?vendorId=60d0fe4f5311236168a109cb&page=1&limit=5
+Authorization: Bearer {{authToken}}
+
+### 13. Filter by Amount Range
+GET {{baseUrl}}/payout-receipts?amountMin=10000&amountMax=50000
+Authorization: Bearer {{authToken}}

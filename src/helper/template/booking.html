@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Demo Booking Reminder</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: Arial, sans-serif;
+        background-color: #f4f6f8;
+      }
+      .container {
+        max-width: 600px;
+        margin: 20px auto;
+        background-color: #ffffff;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+      }
+      .header {
+        background-color: #007bff;
+        color: #ffffff;
+        padding: 20px;
+        text-align: center;
+        font-size: 22px;
+        font-weight: bold;
+      }
+      .content {
+        padding: 30px;
+        color: #333;
+        font-size: 16px;
+        line-height: 1.6;
+      }
+      .content p {
+        margin: 10px 0;
+      }
+      .demo-note {
+        background-color: #fff3cd;
+        color: #856404;
+        border: 1px solid #ffeeba;
+        padding: 10px 15px;
+        border-radius: 6px;
+        margin: 15px 0;
+      }
+      .booking-details {
+        width: 100%;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        margin: 20px 0;
+        border-collapse: collapse;
+      }
+      .booking-details td {
+        padding: 10px;
+        border-bottom: 1px solid #ddd;
+      }
+      .booking-details tr:last-child td {
+        border-bottom: none;
+      }
+      .footer {
+        background-color: #f1f1f1;
+        padding: 20px;
+        text-align: center;
+        font-size: 14px;
+        color: #555;
+      }
+      .footer p {
+        margin: 5px 0;
+      }
+      .footer .copyright {
+        font-size: 12px;
+        color: #777;
+        margin-top: 10px;
+      }
+      .highlight {
+        color: #007bff;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <table role="presentation" width="100%">
+      <tr>
+        <td align="center">
+          <div class="container">
+            <!-- Header -->
+            <div class="header">
+              Demo Booking Reminder
+            </div>
+
+            <!-- Content -->
+            <div class="content">
+              <p>Hello <span class="highlight">{{customerName}}</span>,</p>
+              <p>This is a friendly reminder for your <strong>demo booking</strong> with <strong>{{companyName}}</strong>.</p>
+
+              <div class="demo-note">
+                ⚠️ This is a <strong>demo notification</strong> for testing purposes. No actual booking is scheduled.
+              </div>
+
+              <table class="booking-details">
+                <tr>
+                  <td><strong>Booking ID:</strong></td>
+                  <td>{{bookingId}}</td>
+                </tr>
+                <tr>
+                  <td><strong>Name:</strong></td>
+                  <td>{{name}}</td>
+                </tr>
+                <tr>
+                  <td><strong>Phone:</strong></td>
+                  <td>{{phone}}</td>
+                </tr>
+                <tr>
+                  <td><strong>Email:</strong></td>
+                  <td>{{email}}</td>
+                </tr>
+                <tr>
+                  <td><strong>Scheduled At:</strong></td>
+                  <td>{{bookingDate}}</td>
+                </tr>
+              </table>
+
+              <p>Please review the details above. If this were a real booking, you would need to be available at the scheduled time.</p>
+
+              <p>Thank you for choosing <strong>{{companyName}}</strong>!</p>
+            </div>
+
+            <!-- Footer -->
+            <div class="footer">
+              <p>📧 {{supportEmail}}</p>
+              <p>📞 {{supportPhone}}</p>
+              <p class="copyright">&copy; {{year}} {{companyName}}. All rights reserved.</p>
+            </div>
+          </div>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

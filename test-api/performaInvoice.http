@@ -1,0 +1,350 @@
+### Performa Invoice API Tests
+
+# Variables
+@authToken= eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2ODg3MjI1MzZkNmU3MjA3MDQ5NGNmMjIiLCJpYXQiOjE3NTM5Mzg4MTMsImV4cCI6MTc1Mzk4MjAxM30.uy1a_ltRun9UXDs8GP3rGCI4ic0XYBW19iksqryQ-Qw
+@baseURL = http://localhost:8000/api/v1
+@companyId = 68872696ead9793e17acaccc
+@clientId = 688726e6ead9793e17acacd2
+@performaInvoiceId = 688b02e54a9aa9e654c2e36f
+
+### 1. Generate Performa Invoice Number
+GET {{baseURL}}/finance/sales/performa-invoices/preview-number
+Authorization: Bearer {{authToken}}
+
+### 2. Create Performa Invoice
+POST {{baseURL}}/finance/sales/performa-invoices
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "companyId": "{{companyId}}",
+  "clientId": "{{clientId}}",
+  "performaInvoiceTitle": "Website Development Services",
+  "performaInvoiceNumber": "PI-2025-0001",
+  "date": "2025-01-15T00:00:00.000Z",
+  "dueDate": "2025-02-15T00:00:00.000Z",
+  "validUntil": "2025-03-15T00:00:00.000Z",
+  "taxType": "exclusive",
+  "discountType": "percentage",
+  "discountValue": 10,
+  "shipping": 100,
+  "roundOff": true,
+  "showHSN": true,
+  "showUnit": true,
+  "showSignature": false,
+  "items": [
+    {
+      "name": "Frontend Development",
+      "hsn": "998313",
+      "unit": "Hours",
+      "quantity": 100,
+      "rate": 50,
+      "discount": 5,
+      "discountType": "percentage",
+      "taxType": "cgst_sgst",
+      "taxRate": 18
+    },
+    {
+      "name": "Backend Development", 
+      "hsn": "998313",
+      "unit": "Hours",
+      "quantity": 80,
+      "rate": 60,
+      "discount": 200,
+      "discountType": "flat",
+      "taxType": "cgst_sgst",
+      "taxRate": 18
+    }
+  ],
+  "terms": "Payment terms: 50% advance, 50% on completion",
+  "notes": "Project timeline: 4-6 weeks",
+  "phases": [
+    {
+      "title": "Advance Payment",
+      "percentage": 50,
+      "dueDate": "2025-01-20T00:00:00.000Z"
+    },
+    {
+      "title": "Final Payment",
+      "percentage": 50,
+      "dueDate": "2025-02-15T00:00:00.000Z"
+    }
+  ],
+  "status": "draft"
+}
+
+### 3. Get All Performa Invoices (with pagination and filters)
+GET {{baseURL}}/finance/sales/performa-invoices?page=1&limit=10&sortBy=createdAt&sortOrder=desc
+Authorization: Bearer {{authToken}}
+
+### 4. Search Performa Invoices with filters
+GET {{baseURL}}/finance/sales/performa-invoices/search?search=website&status=draft&dateFrom=2025-01-01&dateTo=2025-12-31
+Authorization: Bearer {{authToken}}
+
+### 5. Get Performa Invoice by ID
+GET {{baseURL}}/finance/sales/performa-invoices/{{performaInvoiceId}}
+Authorization: Bearer {{authToken}}
+
+### 6. Update Performa Invoice
+PUT {{baseURL}}/finance/sales/performa-invoices/{{performaInvoiceId}}
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "performaInvoiceTitle": "Updated Website Development Services",
+  "dueDate": "2025-02-20T00:00:00.000Z",
+  "discountValue": 15,
+  "notes": "Updated project timeline: 5-7 weeks",
+  "items": [
+    {
+      "name": "Frontend Development",
+      "hsn": "998313",
+      "unit": "Hours",
+      "quantity": 120,
+      "rate": 55,
+      "discount": 10,
+      "discountType": "percentage",
+      "taxType": "cgst_sgst",
+      "taxRate": 18
+    }
+  ]
+}
+
+### 7. Update Performa Invoice Status to 'sent'
+PATCH {{baseURL}}/finance/sales/performa-invoices/{{performaInvoiceId}}/status
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "status": "sent"
+}
+
+### 8. Update Status to 'accepted'
+PATCH {{baseURL}}/finance/sales/performa-invoices/{{performaInvoiceId}}/status
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "status": "accepted"
+}
+
+### 9. Record Payment
+POST {{baseURL}}/finance/sales/performa-invoices/{{performaInvoiceId}}/record-payment
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "paymentAmount": 5000,
+  "paymentMethod": "bank_transfer",
+  "paymentReference": "TXN123456789"
+}
+
+### 10. Convert to Invoice
+POST {{baseURL}}/finance/sales/performa-invoices/{{performaInvoiceId}}/convert-to-invoice
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "invoiceNumber": "INV-2025-0001",
+  "invoiceDate": "2025-01-20T00:00:00.000Z",
+  "dueDate": "2025-02-20T00:00:00.000Z",
+  "invoiceType": "tax_invoice"
+}
+
+### 11. Duplicate Performa Invoice
+POST {{baseURL}}/finance/sales/performa-invoices/{{performaInvoiceId}}/duplicate
+Authorization: Bearer {{authToken}}
+
+### 12. Get Performa Invoice Statistics
+GET {{baseURL}}/finance/sales/performa-invoices/stats?period=30
+Authorization: Bearer {{authToken}}
+
+### 13. Filter by Status (Multiple statuses)
+GET {{baseURL}}/finance/sales/performa-invoices?status=draft,sent,accepted
+Authorization: Bearer {{authToken}}
+
+### 14. Filter by Client
+GET {{baseURL}}/finance/sales/performa-invoices?clientId={{clientId}}
+Authorization: Bearer {{authToken}}
+
+### 15. Filter by Conversion Status
+GET {{baseURL}}/finance/sales/performa-invoices?convertedToInvoice=false
+Authorization: Bearer {{authToken}}
+
+### 16. Filter by Payment Status
+GET {{baseURL}}/finance/sales/performa-invoices?paymentReceived=true
+Authorization: Bearer {{authToken}}
+
+### 17. Date Range Filter
+GET {{baseURL}}/finance/sales/performa-invoices?dateFrom=2025-01-01&dateTo=2025-01-31
+Authorization: Bearer {{authToken}}
+
+### 18. Due Date Range Filter
+GET {{baseURL}}/finance/sales/performa-invoices?dueDateFrom=2025-02-01&dueDateTo=2025-02-28
+Authorization: Bearer {{authToken}}
+
+### 19. Create Performa Invoice with CGST/SGST taxes
+POST {{baseURL}}/finance/sales/performa-invoices
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "companyId": "{{companyId}}",
+  "clientId": "{{clientId}}",
+  "performaInvoiceTitle": "Software License",
+  "performaInvoiceNumber": "PI-2025-0002",
+  "date": "2025-01-15T00:00:00.000Z",
+  "dueDate": "2025-02-15T00:00:00.000Z",
+  "taxType": "exclusive",
+  "items": [
+    {
+      "name": "Annual Software License",
+      "hsn": "998313",
+      "unit": "License",
+      "quantity": 1,
+      "rate": 10000,
+      "taxType": "cgst_sgst",
+      "taxRate": 18
+    }
+  ]
+}
+
+### 20. Create Performa Invoice with IGST tax
+POST {{baseURL}}/finance/sales/performa-invoices
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "companyId": "{{companyId}}",
+  "clientId": "{{clientId}}",
+  "performaInvoiceTitle": "Interstate Service",
+  "performaInvoiceNumber": "PI-2025-0003",
+  "date": "2025-01-15T00:00:00.000Z",
+  "dueDate": "2025-02-15T00:00:00.000Z",
+  "taxType": "exclusive",
+  "items": [
+    {
+      "name": "Consulting Service",
+      "hsn": "998313",
+      "unit": "Hours",
+      "quantity": 10,
+      "rate": 1000,
+      "taxType": "igst",
+      "taxRate": 18
+    }
+  ]
+}
+
+### 21. Create Performa Invoice with Cess
+POST {{baseURL}}/finance/sales/performa-invoices
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "companyId": "{{companyId}}",
+  "clientId": "{{clientId}}",
+  "performaInvoiceTitle": "Product with Cess",
+  "performaInvoiceNumber": "PI-2025-0004",
+  "date": "2025-01-15T00:00:00.000Z",
+  "dueDate": "2025-02-15T00:00:00.000Z",
+  "taxType": "exclusive",
+  "items": [
+    {
+      "name": "Luxury Item",
+      "hsn": "998313",
+      "unit": "Piece",
+      "quantity": 1,
+      "rate": 50000,
+      "taxType": "cgst_sgst",
+      "taxRate": 28,
+      "cess": [
+        {
+          "name": "Luxury Cess",
+          "rate": 1
+        }
+      ]
+    }
+  ]
+}
+
+### 22. Try to update accepted performa invoice (should fail)
+PUT {{baseURL}}/finance/sales/performa-invoices/{{performaInvoiceId}}
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "performaInvoiceTitle": "This should fail if status is accepted"
+}
+
+### 23. Try invalid status transition (should fail)
+PATCH {{baseURL}}/finance/sales/performa-invoices/{{performaInvoiceId}}/status
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "status": "draft"
+}
+
+### 24. Delete Draft Performa Invoice
+DELETE {{baseURL}}/finance/sales/performa-invoices/{{performaInvoiceId}}
+Authorization: Bearer {{authToken}}
+
+### 25. Create Performa Invoice from Quotation
+POST {{baseURL}}/finance/sales/performa-invoices
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "companyId": "{{companyId}}",
+  "clientId": "{{clientId}}",
+  "quotationId": "YOUR_QUOTATION_ID_HERE",
+  "convertedFromQuotation": true,
+  "performaInvoiceTitle": "Converted from Quotation",
+  "performaInvoiceNumber": "PI-2025-0005",
+  "date": "2025-01-15T00:00:00.000Z",
+  "dueDate": "2025-02-15T00:00:00.000Z",
+  "items": [
+    {
+      "name": "Service from Quotation",
+      "quantity": 1,
+      "rate": 5000,
+      "taxType": "cgst_sgst",
+      "taxRate": 18
+    }
+  ]
+}
+
+### Error Test Cases
+
+### 26. Create with invalid data (should fail)
+POST {{baseURL}}/finance/sales/performa-invoices
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "companyId": "invalid-id",
+  "performaInvoiceTitle": "",
+  "date": "invalid-date"
+}
+
+### 27. Get non-existent performa invoice (should return 404)
+GET {{baseURL}}/finance/sales/performa-invoices/507f1f77bcf86cd799439011
+Authorization: Bearer {{authToken}}
+
+### 28. Update non-existent performa invoice (should return 404)
+PUT {{baseURL}}/finance/sales/performa-invoices/507f1f77bcf86cd799439011
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "performaInvoiceTitle": "Non-existent"
+}
+
+### 29. Record payment without authorization (should fail)
+POST {{baseURL}}/finance/sales/performa-invoices/{{performaInvoiceId}}/record-payment
+Content-Type: application/json
+
+{
+  "paymentAmount": 1000,
+  "paymentMethod": "cash"
+}

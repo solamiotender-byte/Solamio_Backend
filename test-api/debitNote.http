@@ -1,0 +1,136 @@
+### Variables
+@baseUrl = http://localhost:9000/api/v1
+@authToken = YOUR_AUTH_TOKEN_HERE
+@companyId = YOUR_COMPANY_ID_HERE
+@vendorId = YOUR_VENDOR_ID_HERE
+@purchaseId = YOUR_PURCHASE_ID_HERE
+@debitNoteId = YOUR_DEBIT_NOTE_ID_HERE
+
+### Create Debit Note
+POST {{baseUrl}}/finance/purchases/debit-notes
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "vendorId": "{{vendorId}}",
+  "purchaseId": "{{purchaseId}}",
+  "debitNoteDate": "2025-01-15T00:00:00.000Z",
+  "originalBillNumber": "BILL-2025-001",
+  "originalBillDate": "2025-01-10T00:00:00.000Z",
+  "reason": "Quality issues with delivered goods",
+  "debitType": "quality_issue",
+  "priority": "high",
+  "taxType": "exclusive",
+  "discountType": "flat",
+  "discountValue": 0,
+  "shipping": 0,
+  "roundOff": true,
+  "showHSN": true,
+  "showUnit": true,
+  "showSignature": false,
+  "items": [
+    {
+      "name": "Defective Product A",
+      "hsn": "8501",
+      "unit": "pcs",
+      "quantity": 5,
+      "rate": 1000,
+      "discount": 0,
+      "discountType": "flat",
+      "taxType": "cgst_sgst",
+      "taxRate": 18,
+      "reason": "Product received with manufacturing defects"
+    }
+  ],
+  "terms": "Debit note raised for quality issues",
+  "notes": "Items were damaged during delivery"
+}
+
+### Get All Debit Notes
+GET {{baseUrl}}/finance/purchases/debit-notes?page=1&limit=10
+Authorization: Bearer {{authToken}}
+
+### Get All Debit Notes with filters
+GET {{baseUrl}}/finance/purchases/debit-notes?status=draft&priority=high&page=1&limit=10
+Authorization: Bearer {{authToken}}
+
+### Get Debit Note by ID
+GET {{baseUrl}}/finance/purchases/debit-notes/{{debitNoteId}}
+Authorization: Bearer {{authToken}}
+
+### Update Debit Note
+PUT {{baseUrl}}/finance/purchases/debit-notes/{{debitNoteId}}
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "reason": "Updated: Quality issues and quantity shortage",
+  "debitType": "quality_issue",
+  "priority": "urgent",
+  "notes": "Updated notes - additional issues found"
+}
+
+### Approve Debit Note
+PATCH {{baseUrl}}/finance/purchases/debit-notes/{{debitNoteId}}/approve
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "notes": "Approved after review"
+}
+
+### Resolve Debit Note
+PATCH {{baseUrl}}/finance/purchases/debit-notes/{{debitNoteId}}/resolve
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "resolutionType": "credit_note_received",
+  "amount": 5900,
+  "notes": "Vendor issued credit note for the full amount"
+}
+
+### Dispute Debit Note
+PATCH {{baseUrl}}/finance/purchases/debit-notes/{{debitNoteId}}/dispute
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "notes": "Vendor disputes the quality issues claimed"
+}
+
+### Get Debit Notes by Purchase ID
+GET {{baseUrl}}/finance/purchases/debit-notes/purchase/{{purchaseId}}
+Authorization: Bearer {{authToken}}
+
+### Get Debit Notes by Vendor ID
+GET {{baseUrl}}/finance/purchases/debit-notes/vendor/{{vendorId}}?page=1&limit=10
+Authorization: Bearer {{authToken}}
+
+### Get Debit Note Statistics
+GET {{baseUrl}}/finance/purchases/debit-notes/stats
+Authorization: Bearer {{authToken}}
+
+### Get Debit Note Statistics with filters
+GET {{baseUrl}}/finance/purchases/debit-notes/stats?startDate=2025-01-01&endDate=2025-12-31&vendorId={{vendorId}}
+Authorization: Bearer {{authToken}}
+
+### Duplicate Debit Note
+POST {{baseUrl}}/finance/purchases/debit-notes/{{debitNoteId}}/duplicate
+Authorization: Bearer {{authToken}}
+
+### Delete Debit Note
+DELETE {{baseUrl}}/finance/purchases/debit-notes/{{debitNoteId}}
+Authorization: Bearer {{authToken}}
+
+### Search Debit Notes
+GET {{baseUrl}}/finance/purchases/debit-notes?search=quality&sortBy=debitNoteDate&sortOrder=desc
+Authorization: Bearer {{authToken}}
+
+### Filter by Date Range
+GET {{baseUrl}}/finance/purchases/debit-notes?startDate=2025-01-01&endDate=2025-01-31
+Authorization: Bearer {{authToken}}
+
+### Filter by Status and Resolution Status
+GET {{baseUrl}}/finance/purchases/debit-notes?status=sent&resolutionStatus=pending
+Authorization: Bearer {{authToken}}

@@ -1,0 +1,120 @@
+@token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2ODg3MjI1MzZkNmU3MjA3MDQ5NGNmMjIiLCJpYXQiOjE3NTM3ODI3NjksImV4cCI6MTc1MzgyNTk2OX0.sLbUnj4eC5Ob20Spk3W4oqaB4_E_tc3KP1GohU36W8w
+@url=http://localhost:8000/api/v1/finance/inventory/item
+
+@itemId=68886777b00942cf8b0b0639
+
+@companyId=68872696ead9793e17acaccc
+
+@categoryId=68886908b00942cf8b0b0682
+
+
+### Create Item
+POST {{url}}/createItem
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "companyId": "{{companyId}}",
+  "name": "Test Product3",
+  "sku": "TP-003",
+  "description": "A sample product for testing.",
+  "type": "goods",
+  "category": "68886908b00942cf8b0b0682",
+  "subcategory": "64c3f2e2b8e4a2a1b2c3d4e7",
+  "hsn": "1234",
+  "unit": "pcs",
+  "weight": "1kg",
+  "length": "10",
+  "width": "5",
+  "height": "2",
+  "dimensionUnit": "cm",
+  "imageUrl": "https://example.com/image.jpg",
+  "igst": 18,
+  "sgst": 9,
+  "cgst": 9,
+  "sellingPrice": 100,
+  "salesDescription": "For sale",
+  "costPrice": 80,
+  "purchaseDescription": "For purchase",
+  "preferredVendor": "688863093369f2230ac4342c",
+  "trackInventory": true,
+  "openingStock": 50,
+  "currentStock": 50,
+  "lowStockThreshold": 10,
+  "highStockThreshold": 100,
+  "expiryDate": "2025-12-31",
+  "isArchived": false
+}
+
+### Get All Items
+GET {{url}}/getAllItems/{{companyId}}
+Authorization: Bearer {{token}}
+
+### Get Item Details
+GET {{url}}/itemDetails/{{companyId}}/{{itemId}}
+Authorization: Bearer {{token}}
+
+### Update Item
+PUT {{url}}/updateItem/{{companyId}}/{{itemId}}
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "Updated Product Name"
+}
+
+### Delete Item
+DELETE {{url}}/deleteItem/{{companyId}}/{{itemId}}
+Authorization: Bearer {{token}}
+
+### Bulk Delete Items
+DELETE {{url}}/bulkDeleteItems/{{companyId}}
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "itemIds": ["{{itemId1}}", "{{itemId2}}"]
+}
+
+### Update Stock
+PUT {{url}}/updateStock/{{companyId}}/{{itemId}}
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "adjustment": 10,
+  "adjustmentType": "increase",
+  "reason": "Restock"
+}
+
+### Get Low Stock Items
+GET {{url}}/lowStockItems/{{companyId}}
+Authorization: Bearer {{token}}
+
+### Get Items by Category
+GET {{url}}/itemsByCategory/{{companyId}}/{{categoryId}}
+Authorization: Bearer {{token}}
+
+### Search Items
+GET {{url}}/searchItems/{{companyId}}?q=Test
+Authorization: Bearer {{token}}
+
+### Get Item Statistics
+GET {{url}}/statistics/{{companyId}}
+Authorization: Bearer {{token}}
+
+### Upload Item Image
+POST {{url}}/uploadImage/{{itemId}}
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data
+
+--boundary
+Content-Disposition: form-data; name="image"; filename="test.jpg"
+Content-Type: image/jpeg
+
+< ./test.jpg
+--boundary--
+
+### Delete Item Image
+DELETE {{url}}/deleteImage/{{itemId}}
+Authorization: Bearer {{token}}

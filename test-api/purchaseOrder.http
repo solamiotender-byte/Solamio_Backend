@@ -1,0 +1,157 @@
+### Purchase Order API Tests
+
+### Variables
+@baseUrl = http://localhost:5000/api
+@companyId = 60f7b1b3e4b0a3a3a3a3a3a3
+@vendorId = 60f7b1b3e4b0a3a3a3a3a3a4
+@purchaseOrderId = 60f7b1b3e4b0a3a3a3a3a3a5
+@authToken = your_jwt_token_here
+
+### Create Purchase Order
+POST {{baseUrl}}/finance/purchases/purchase-orders/createPurchaseOrder
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "vendorId": "{{vendorId}}",
+  "purchaseOrderNumber": "PO-2025-0001",
+  "purchaseOrderDate": "2025-08-02T00:00:00.000Z",
+  "expectedDeliveryDate": "2025-08-15T00:00:00.000Z",
+  "status": "draft",
+  "priority": "medium",
+  "taxType": "exclusive",
+  "discountType": "flat",
+  "discountValue": 100,
+  "shipping": 50,
+  "roundOff": true,
+  "items": [
+    {
+      "itemId": "60f7b1b3e4b0a3a3a3a3a3a6",
+      "name": "Sample Item 1",
+      "hsn": "1234",
+      "unit": "pcs",
+      "quantity": 10,
+      "rate": 100,
+      "discount": 5,
+      "discountType": "flat",
+      "taxType": "cgst_sgst",
+      "taxRate": 18,
+      "cess": [
+        {
+          "name": "Environment Cess",
+          "rate": 1
+        }
+      ]
+    },
+    {
+      "name": "Sample Item 2",
+      "hsn": "5678",
+      "unit": "kg",
+      "quantity": 5,
+      "rate": 200,
+      "discount": 10,
+      "discountType": "percentage",
+      "taxType": "igst",
+      "taxRate": 12
+    }
+  ],
+  "terms": "Payment within 30 days",
+  "notes": "Handle with care"
+}
+
+###
+
+### Get All Purchase Orders
+GET {{baseUrl}}/finance/purchases/purchase-orders/getAllPurchaseOrders/{{companyId}}?page=1&limit=10&sortBy=createdAt&sortOrder=desc
+Authorization: Bearer {{authToken}}
+
+###
+
+### Get Purchase Order by ID
+GET {{baseUrl}}/finance/purchases/purchase-orders/purchaseOrderDetails/{{companyId}}/{{purchaseOrderId}}
+Authorization: Bearer {{authToken}}
+
+###
+
+### Update Purchase Order
+PUT {{baseUrl}}/finance/purchases/purchase-orders/updatePurchaseOrderDetails/{{companyId}}/{{purchaseOrderId}}
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "status": "sent",
+  "priority": "high",
+  "expectedDeliveryDate": "2025-08-20T00:00:00.000Z",
+  "notes": "Updated notes - urgent delivery required"
+}
+
+###
+
+### Search Purchase Orders
+GET {{baseUrl}}/finance/purchases/purchase-orders/searchPurchaseOrders/{{companyId}}?q=PO-2025
+Authorization: Bearer {{authToken}}
+
+###
+
+### Update Approval Status
+PATCH {{baseUrl}}/finance/purchases/purchase-orders/updateApprovalStatus/{{companyId}}/{{purchaseOrderId}}
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "approvalStatus": "approved"
+}
+
+###
+
+### Acknowledge by Vendor
+PATCH {{baseUrl}}/finance/purchases/purchase-orders/acknowledgeByVendor/{{companyId}}/{{purchaseOrderId}}
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "vendorComments": "Order acknowledged. Will deliver as per schedule."
+}
+
+###
+
+### Add Attachment
+POST {{baseUrl}}/finance/purchases/purchase-orders/addAttachment/{{companyId}}/{{purchaseOrderId}}
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "url": "https://example.com/attachment.pdf"
+}
+
+###
+
+### Remove Attachment
+DELETE {{baseUrl}}/finance/purchases/purchase-orders/removeAttachment/{{companyId}}/{{purchaseOrderId}}/0
+Authorization: Bearer {{authToken}}
+
+###
+
+### Get Purchase Order Statistics
+GET {{baseUrl}}/finance/purchases/purchase-orders/stats/{{companyId}}?startDate=2025-01-01&endDate=2025-12-31
+Authorization: Bearer {{authToken}}
+
+###
+
+### Bulk Delete Purchase Orders
+DELETE {{baseUrl}}/finance/purchases/purchase-orders/bulkDeletePurchaseOrders/{{companyId}}
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "purchaseOrderIds": [
+    "{{purchaseOrderId}}",
+    "60f7b1b3e4b0a3a3a3a3a3a7"
+  ]
+}
+
+###
+
+### Delete Purchase Order
+DELETE {{baseUrl}}/finance/purchases/purchase-orders/deletePurchaseOrder/{{companyId}}/{{purchaseOrderId}}
+Authorization: Bearer {{authToken}}

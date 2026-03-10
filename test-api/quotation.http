@@ -1,0 +1,609 @@
+
+### Quotation Management API Tests
+###
+### SETUP INSTRUCTIONS:
+### 1. Update @token with a valid JWT token
+### 2. Update @companyId and @clientId with valid MongoDB ObjectIds
+### 3. Run test #1 first to generate a quotation number
+### 4. Run test #2 to create a quotation and copy the returned ID to @quotationId
+### 5. Execute tests in sequence for best results
+###
+### TEST STRUCTURE:
+### - Tests 1-19: Core CRUD operations
+### - Tests 20-30: Enhanced features (approval, email, conversion)
+### - Tests 31-45: Edge cases and complex scenarios
+### - Tests V1-V10: Validation and error handling
+###
+
+# NOTE: Update this token with a valid JWT token before running tests
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2ODg3MjI1MzZkNmU3MjA3MDQ5NGNmMjIiLCJpYXQiOjE3NTM4NTY5OTAsImV4cCI6MTc1MzkwMDE5MH0.0D6J1TDJu8qnZH9y0WFSYQfsMnUYvbzLctCp6N7AZFg
+
+# Base URL
+@baseUrl = http://localhost:8000/api/v1/finance/sales
+@companyId = 68872696ead9793e17acaccc
+@clientId = 688726e6ead9793e17acacd2
+# NOTE: Update this with actual quotation ID after creating a quotation
+@quotationId = 688a01e0887e8bd0504f28eb
+
+### 1. Generate Quotation Number
+GET {{baseUrl}}/quotations/preview-number
+Authorization: Bearer {{token}}
+
+### 2. Create New Quotation (Enhanced)
+POST {{baseUrl}}/quotations
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "companyId": "{{companyId}}",
+  "clientId": "{{clientId}}",
+  "quotationTitle": "Software Development Services Q4",
+  "quotationNumber": "QUO-2025-0001",
+  "date": "2025-07-29",
+  "dueDate": "2025-08-15",
+  "taxType": "exclusive",
+  "discountType": "percentage",
+  "discountValue": 5,
+  "shipping": 100,
+  "roundOff": true,
+  "showHSN": true,
+  "showUnit": true,
+  "showSignature": false,
+  "items": [
+    {
+      "name": "Web Development",
+      "hsn": "998311",
+      "unit": "Hours",
+      "quantity": 100,
+      "rate": 50,
+      "discount": 0,
+      "discountType": "flat",
+      "taxType": "cgst_sgst",
+      "taxRate": 18
+    },
+    {
+      "name": "Mobile App Development", 
+      "hsn": "998311",
+      "unit": "Hours",
+      "quantity": 80,
+      "rate": 60,
+      "discount": 10,
+      "discountType": "percentage",
+      "taxType": "cgst_sgst",
+      "taxRate": 18
+    }
+  ],
+  "terms": "Payment terms: 50% advance, 50% on completion",
+  "notes": "All prices are exclusive of taxes unless mentioned otherwise",
+  "attachments": [],
+  "phases": [
+    {
+      "title": "Advance Payment",
+      "percentage": 50,
+      "dueDate": "2025-07-29"
+    },
+    {
+      "title": "Final Payment",
+      "percentage": 50,
+      "dueDate": "2025-08-28"
+    }
+  ],
+  "status": "draft"
+}
+
+### 3. Get All Quotations (Enhanced filters)
+GET {{baseUrl}}/quotations?page=1&limit=10&status=draft&sortBy=createdAt&sortOrder=desc
+Authorization: Bearer {{token}}
+
+### 4. Advanced Search
+GET {{baseUrl}}/quotations/search?search=software&status=draft&page=1&limit=5
+Authorization: Bearer {{token}}
+
+### 5. Get All Quotations (with date filters and new fields)
+GET {{baseUrl}}/quotations?dateFrom=2025-07-01&dateTo=2025-07-31&clientId={{clientId}}&convertedToInvoice=false
+Authorization: Bearer {{token}}
+
+### 6. Get Quotation by ID
+GET {{baseUrl}}/quotations/{{quotationId}}
+Authorization: Bearer {{token}}
+
+### 7. Update Quotation (Enhanced)
+PUT {{baseUrl}}/quotations/{{quotationId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "quotationTitle": "Updated Software Development Services Q4",
+  "discountValue": 7,
+  "shipping": 150,
+  "notes": "Updated pricing and shipping costs with premium features",
+  "items": [
+    {
+      "name": "Web Development",
+      "hsn": "998311",
+      "unit": "Hours",
+      "quantity": 120,
+      "rate": 55,
+      "discount": 0,
+      "discountType": "flat",
+      "taxType": "cgst_sgst",
+      "taxRate": 18
+    },
+    {
+      "name": "Mobile App Development", 
+      "hsn": "998311",
+      "unit": "Hours",
+      "quantity": 80,
+      "rate": 60,
+      "discount": 10,
+      "discountType": "percentage",
+      "taxType": "cgst_sgst",
+      "taxRate": 18
+    },
+    {
+      "name": "API Development",
+      "hsn": "998311",
+      "unit": "Hours",
+      "quantity": 40,
+      "rate": 45,
+      "discount": 0,
+      "discountType": "flat",
+      "taxType": "cgst_sgst",
+      "taxRate": 18
+    }
+  ]
+}
+
+### 8. Update Quotation Status (Enhanced)
+PATCH {{baseUrl}}/quotations/{{quotationId}}/status
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "status": "sent"
+}
+
+
+
+### 12. Convert to Invoice
+POST {{baseUrl}}/quotations/{{quotationId}}/convert-to-invoice
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "invoiceNumber": "INV-2025-0001",
+  "invoiceDate": "2025-07-30",
+  "dueDate": "2025-08-30"
+}
+
+### 12. Convert to Performa-Invoice
+POST {{baseUrl}}/quotations/{{quotationId}}/convert-to-performa-invoice
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "invoiceNumber": "INV-2025-0001",
+  "invoiceDate": "2025-07-30",
+  "dueDate": "2025-08-30"
+}
+
+### 13. Duplicate Quotation
+POST {{baseUrl}}/quotations/{{quotationId}}/duplicate
+Authorization: Bearer {{token}}
+
+### 14. Get Enhanced Quotation Statistics
+GET {{baseUrl}}/quotations/stats?period=30
+Authorization: Bearer {{token}}
+
+### 15. Get Quotation Statistics (90 days)
+GET {{baseUrl}}/quotations/stats?period=90
+Authorization: Bearer {{token}}
+
+### 16. Bulk Actions - Update Status
+POST {{baseUrl}}/quotations/bulk-action
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "quotationIds": ["{{quotationId}}", "60f7b3b3b3b3b3b3b3b3b3b6"],
+  "action": "updateStatus",
+  "actionData": {
+    "status": "sent"
+  }
+}
+
+### 17. Bulk Actions - Approve Multiple
+POST {{baseUrl}}/quotations/bulk-action
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "quotationIds": ["{{quotationId}}", "60f7b3b3b3b3b3b3b3b3b3b6"],
+  "action": "approve",
+  "actionData": {
+    "approvalComments": "Bulk approval for Q4 quotations"
+  }
+}
+
+### 18. Bulk Actions - Delete Multiple
+POST {{baseUrl}}/quotations/bulk-action
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "quotationIds": ["{{quotationId}}", "60f7b3b3b3b3b3b3b3b3b3b6"],
+  "action": "delete"
+}
+
+### 19. Delete Quotation (only draft status)
+DELETE {{baseUrl}}/quotations/{{quotationId}}
+Authorization: Bearer {{token}}
+
+### Additional Enhanced Test Cases
+
+### 20. Create Quotation with Custom Fields
+POST {{baseUrl}}/quotations
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "companyId": "{{companyId}}",
+  "clientId": "{{clientId}}",
+  "quotationTitle": "Consulting Services - Business Strategy",
+  "quotationNumber": "QUO-2025-0002",
+  "date": "2025-07-29",
+  "dueDate": "2025-08-05",
+  "items": [
+    {
+      "name": "Business Consulting",
+      "quantity": 10,
+      "rate": 150,
+      "taxType": "igst",
+      "taxRate": 18
+    }
+  ]
+}
+
+### 21. Search with Multiple Filters
+GET {{baseUrl}}/quotations/search?search=development&status=sent&status=accepted&sortBy=createdAt&sortOrder=desc&dateFrom=2025-07-01&dateTo=2025-08-31
+Authorization: Bearer {{token}}
+
+### 22. Filter by Conversion Status
+GET {{baseUrl}}/quotations?convertedToInvoice=false&status=accepted&sortBy=acceptedAt&sortOrder=asc
+Authorization: Bearer {{token}}
+
+### 23. Get Quotations by Priority
+GET {{baseUrl}}/quotations?status=draft&sortBy=dueDate&sortOrder=asc
+Authorization: Bearer {{token}}
+
+### 24. Get Quotations by Category
+GET {{baseUrl}}/quotations?status=sent&limit=20
+Authorization: Bearer {{token}}
+
+### 25. Get Quotations with Tags
+GET {{baseUrl}}/quotations?status=accepted&convertedToInvoice=false
+Authorization: Bearer {{token}}
+
+### 26. Try to Convert Non-Accepted Quotation (should fail)
+POST {{baseUrl}}/quotations/{{quotationId}}/convert-to-invoice
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "invoiceNumber": "INV-2025-FAIL",
+  "invoiceDate": "2025-07-30"
+}
+
+### 27. Try to Update Converted Quotation (should fail)
+PUT {{baseUrl}}/quotations/{{quotationId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "quotationTitle": "This should fail if quotation is converted"
+}
+
+### 28. Try Invalid Bulk Action
+POST {{baseUrl}}/quotations/bulk-action
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "quotationIds": ["{{quotationId}}"],
+  "action": "invalidAction"
+}
+
+### 29. Create Quotation with Invalid Priority (should fail)
+POST {{baseUrl}}/quotations
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "companyId": "{{companyId}}",
+  "clientId": "{{clientId}}",
+  "quotationTitle": "Invalid Test",
+  "quotationNumber": "QUO-2025-INVALID",
+  "date": "2025-07-29",
+  "dueDate": "2025-08-05",
+  "status": "invalid_status",
+  "items": [
+    {
+      "name": "Test Service",
+      "quantity": 1,
+      "rate": 100,
+      "taxRate": 18
+    }
+  ]
+}
+
+### 30. Try Invalid Status Transition (should fail)
+PATCH {{baseUrl}}/quotations/{{quotationId}}/status
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "status": "converted"
+}
+
+### 31. Create Quotation with Minimal Data
+POST {{baseUrl}}/quotations
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "companyId": "{{companyId}}",
+  "clientId": "{{clientId}}",
+  "quotationTitle": "Basic Service",
+  "quotationNumber": "QUO-2025-MIN",
+  "date": "2025-07-30",
+  "dueDate": "2025-08-05",
+  "items": [
+    {
+      "name": "Consulting",
+      "quantity": 10,
+      "rate": 100,
+      "taxType": "cgst_sgst",
+      "taxRate": 18
+    }
+  ]
+}
+
+### 32. Create Quotation with Invalid Data (should fail)
+POST {{baseUrl}}/quotations
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "companyId": "{{companyId}}",
+  "clientId": "{{clientId}}",
+  "quotationTitle": "",
+  "quotationNumber": "QUO-2025-INVALID",
+  "date": "2025-07-30",
+  "dueDate": "2025-07-25",
+  "items": []
+}
+
+### 33. Search Quotations by Number
+GET {{baseUrl}}/quotations/search?search=QUO-2025&limit=20
+Authorization: Bearer {{token}}
+
+### 34. Filter by Status and Client
+GET {{baseUrl}}/quotations?status=sent&clientId={{clientId}}&sortBy=dueDate&sortOrder=asc
+Authorization: Bearer {{token}}
+
+### 35. Get Quotations with Due Date Filter
+GET {{baseUrl}}/quotations?dueDateFrom=2025-08-01&dueDateTo=2025-08-31
+Authorization: Bearer {{token}}
+
+### 36. Try to Delete Non-Draft Quotation (should fail)
+DELETE {{baseUrl}}/quotations/{{quotationId}}
+Authorization: Bearer {{token}}
+
+### 37. Test Authentication (should fail without token)
+GET {{baseUrl}}/quotations
+
+### 38. Test Invalid Company Access (should fail)
+GET {{baseUrl}}/quotations/60f7b3b3b3b3b3b3b3b3b3b9
+Authorization: Bearer {{token}}
+
+### 39. Test Rate Limiting (if implemented)
+GET {{baseUrl}}/quotations?page=1&limit=1000
+Authorization: Bearer {{token}}
+
+### 40. Test Export Functionality (if implemented)
+GET {{baseUrl}}/quotations/export?format=csv&status=sent
+Authorization: Bearer {{token}}
+
+### 41. Access Shareable Link (Public - No Auth Required)
+# NOTE: Replace with actual shareable link generated from test #11
+GET http://localhost:3000/quotations/shared/SHAREABLE_TOKEN_HERE
+
+### 42. Test Pagination Edge Cases
+GET {{baseUrl}}/quotations?page=999&limit=1
+Authorization: Bearer {{token}}
+
+### 43. Test Large Limit (should be capped)
+GET {{baseUrl}}/quotations?limit=999999
+Authorization: Bearer {{token}}
+
+### 44. Test Complex Search Query
+GET {{baseUrl}}/quotations/search?search=software development&status=sent&status=draft&sortBy=createdAt&sortOrder=desc&page=1&limit=5&dateFrom=2025-07-01&dateTo=2025-12-31&convertedToInvoice=false
+Authorization: Bearer {{token}}
+
+### 45. Test Send Email to Multiple Recipients (if supported)
+POST {{baseUrl}}/quotations/{{quotationId}}/send-email
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "to": "client@example.com,manager@example.com",
+  "subject": "Quotation for Software Development Services - Multiple Recipients",
+  "message": "Please find attached the quotation for your software development project."
+}
+
+### VALIDATION TESTS SECTION ###
+
+### V1. Test Missing Required Fields (should fail)
+POST {{baseUrl}}/quotations
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "companyId": "{{companyId}}"
+}
+
+### V2. Test Invalid MongoDB ObjectId (should fail)
+POST {{baseUrl}}/quotations
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "companyId": "invalid-id",
+  "clientId": "{{clientId}}",
+  "quotationTitle": "Test",
+  "quotationNumber": "TEST-001",
+  "date": "2025-07-30",
+  "dueDate": "2025-08-30",
+  "items": [{"name": "Test", "quantity": 1, "rate": 100}]
+}
+
+### V3. Test Invalid Date Format (should fail)
+POST {{baseUrl}}/quotations
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "companyId": "{{companyId}}",
+  "clientId": "{{clientId}}",
+  "quotationTitle": "Test",
+  "quotationNumber": "TEST-002",
+  "date": "invalid-date",
+  "dueDate": "2025-08-30",
+  "items": [{"name": "Test", "quantity": 1, "rate": 100}]
+}
+
+### V4. Test Due Date Before Date (should fail)
+POST {{baseUrl}}/quotations
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "companyId": "{{companyId}}",
+  "clientId": "{{clientId}}",
+  "quotationTitle": "Test",
+  "quotationNumber": "TEST-003",
+  "date": "2025-08-30",
+  "dueDate": "2025-07-30",
+  "items": [{"name": "Test", "quantity": 1, "rate": 100}]
+}
+
+### V5. Test Negative Values (should fail)
+POST {{baseUrl}}/quotations
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "companyId": "{{companyId}}",
+  "clientId": "{{clientId}}",
+  "quotationTitle": "Test",
+  "quotationNumber": "TEST-004",
+  "date": "2025-07-30",
+  "dueDate": "2025-08-30",
+  "items": [{"name": "Test", "quantity": -1, "rate": -100}]
+}
+
+### V6. Test Empty Items Array (should fail)
+POST {{baseUrl}}/quotations
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "companyId": "{{companyId}}",
+  "clientId": "{{clientId}}",
+  "quotationTitle": "Test",
+  "quotationNumber": "TEST-005",
+  "date": "2025-07-30",
+  "dueDate": "2025-08-30",
+  "items": []
+}
+
+### V7. Test Invalid Status (should fail)
+PATCH {{baseUrl}}/quotations/{{quotationId}}/status
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "status": "invalid_status"
+}
+
+### V8. Test Invalid Priority (should fail)
+POST {{baseUrl}}/quotations
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "companyId": "{{companyId}}",
+  "clientId": "{{clientId}}",
+  "quotationTitle": "Test Priority",
+  "quotationNumber": "TEST-006",
+  "date": "2025-07-30",
+  "dueDate": "2025-08-30",
+  "status": "invalid_status",
+  "items": [{"name": "Test", "quantity": 1, "rate": 100}]
+}
+
+### V9. Test Invalid Email Format (should fail)
+POST {{baseUrl}}/quotations/{{quotationId}}/send-email
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "to": "invalid-email",
+  "subject": "Test",
+  "message": "Test message"
+}
+
+### V10. Test Invalid Bulk Action (should fail)
+POST {{baseUrl}}/quotations/bulk-action
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "quotationIds": ["{{quotationId}}"],
+  "action": "invalidAction"
+}
+
+###
+### TESTING NOTES:
+### 
+### EXPECTED SUCCESS FLOWS:
+### 1. Create quotation (draft) → Send email → Status becomes 'sent' 
+### 2. Sent quotation → Update status to 'accepted' → Convert to invoice
+### 3. Draft quotation → Approve (if requiresApproval=true) → Send email
+### 4. Any quotation → Generate shareable link → Access publicly
+### 5. Multiple quotations → Bulk operations (status update, approve, delete)
+###
+### EXPECTED VALIDATION FAILURES:
+### - Missing required fields (companyId, clientId, quotationTitle, items)
+### - Invalid date formats or due date before date
+### - Negative quantities or rates
+### - Empty items array
+### - Invalid status transitions (e.g., rejected → accepted)
+### - Invalid email formats
+### - Invalid MongoDB ObjectIds
+###
+### STATUS TRANSITION RULES:
+### draft → [sent, draft]
+### sent → [accepted, rejected, expired, draft]  
+### accepted → [accepted, converted]
+### rejected → [rejected]
+### expired → [expired, draft]
+### converted → [converted]
+###
+### BUSINESS RULES:
+### - Only draft quotations can be deleted
+### - Only accepted quotations can be converted to invoices
+### - Quotations with requiresApproval=true must be approved before sending
+### - Email sending auto-updates draft status to sent
+### - Conversion auto-updates accepted status to converted
+###
