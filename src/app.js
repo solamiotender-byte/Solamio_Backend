@@ -27,6 +27,7 @@ const allowedOrigins = [
   "https://solar-frontend-seven.vercel.app",
   "https://www.sunergytechsolar.com",
   "https://sunergytechsolar.com",
+  "https://solar-frontend-lake.vercel.app"
 ];
 
 const corsOptions = {
