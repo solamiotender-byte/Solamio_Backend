@@ -11,7 +11,11 @@ import apiV1Router from "./routes/index.js";
 import globalErrorHandler from "./middlewares/globalErrorHandler.js";
 
 // 🔁 Cron Jobs
-import { startHourlyBackup, startDailyCopy, startRestoreCron } from "./cron/dbBackup.cron.js";
+import {
+  startHourlyBackup,
+  startDailyCopy,
+  startRestoreCron,
+} from "./cron/dbBackup.cron.js";
 
 const app = express();
 
@@ -21,35 +25,36 @@ startRestoreCron();
 startDailyCopy();
 
 // ==================== CORS ====================
-// ==================== CORS ====================
 const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:3001",
   "https://solar-frontend-lake.vercel.app",
   "https://solar-frontend-seven.vercel.app",
   "https://sunergytechsolar.com",
-  "https://www.sunergytechsolar.com"
+  "https://www.sunergytechsolar.com",
 ];
 
-app.use(cors({
-  origin: function(origin, callback) {
+// ✅ FIX: Define corsOptions once and reuse — previously corsOptions was never
+//         declared, which caused a ReferenceError crash on startup.
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (mobile apps, curl, Postman, etc.)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1) {
+    if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      callback(null, true); // allow instead of blocking
+      // Log unknown origins in dev; in production you may want to block them
+      console.warn(`CORS: unknown origin "${origin}" — allowed anyway`);
+      callback(null, true);
     }
   },
   credentials: true,
-  methods: ["GET","POST","PUT","DELETE","PATCH","OPTIONS"],
-  allowedHeaders: ["Content-Type","Authorization"]
-}));
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+};
 
-
-
-app.options("*", cors());
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
+app.options("*", cors(corsOptions)); // pre-flight for all routes
 
 // ==================== SECURITY ====================
 app.use(
@@ -63,19 +68,8 @@ app.use(xss());
 app.use(hpp());
 
 // ==================== BODY ====================
-app.use(
-  express.json({
-    limit: "50mb",
-  })
-);
-
-app.use(
-  express.urlencoded({
-    extended: true,
-    limit: "50mb",
-  })
-);
-
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 app.use(compression());
 
 // ==================== HEALTH CHECK ====================
