@@ -35,6 +35,7 @@ router.post(
   createUserController
 );
 
+
 /* Get All Users with filters */
 router.get(
   "/getAllUsers",
