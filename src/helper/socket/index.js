@@ -1,40 +1,37 @@
 // socket/index.js
 import { Server } from "socket.io";
-import jwt from "jsonwebtoken";
+import jwt        from "jsonwebtoken";
+import { registerLocationEvents } from "./location.events.js"; // ✅ ADD THIS
 
 let io = null;
 
 export const initializeSocket = (server) => {
   io = new Server(server, {
     cors: {
-      origin: process.env.CLIENT_URL ||"https://solar-frontend-lake.vercel.app",
-      methods: ["GET", "POST", "PUT", "DELETE"],
-      credentials: true,
-      allowedHeaders: ["Authorization", "Content-Type"]
+      origin:         process.env.CLIENT_URL || "https://solar-frontend-lake.vercel.app",
+      methods:        ["GET", "POST", "PUT", "DELETE"],
+      credentials:    true,
+      allowedHeaders: ["Authorization", "Content-Type"],
     },
-    pingTimeout: 60000,
+    pingTimeout:  60000,
     pingInterval: 25000,
-    transports: ['websocket', 'polling']
+    transports:   ["websocket", "polling"],
   });
 
-  // Authentication middleware
+  // ── Auth middleware ──────────────────────────────────────────────────────────
   io.use(async (socket, next) => {
     try {
-      const token = socket.handshake.auth.token || 
-                    socket.handshake.headers.authorization?.split(' ')[1];
+      const token =
+        socket.handshake.auth.token ||
+        socket.handshake.headers.authorization?.split(" ")[1];
 
-      if (!token) {
-        return next(new Error("Authentication required"));
-      }
+      if (!token) return next(new Error("Authentication required"));
 
-      // Verify JWT token
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      
-      // Attach user data to socket
       socket.user = {
-        id: decoded.id,
-        role: decoded.role,
-        email: decoded.email
+        id:         decoded._id,   // ✅ FIX: your JWT signs _id not id
+        role:       decoded.role,
+        supervisor: decoded.supervisor ?? null,
       };
 
       next();
@@ -44,69 +41,41 @@ export const initializeSocket = (server) => {
     }
   });
 
-  // Connection handler
+  // ── Connection handler ───────────────────────────────────────────────────────
   io.on("connection", (socket) => {
     console.log(`User connected: ${socket.user.id} (${socket.user.role})`);
 
-    // Join user-specific room
+    // Join personal + role rooms
     socket.join(`user-${socket.user.id}`);
-    
-    // Join role-specific room
     socket.join(`role-${socket.user.role}`);
 
-    // If user has supervisor, join supervisor room
     if (socket.user.supervisor) {
       socket.join(`supervisor-${socket.user.supervisor}`);
     }
 
-    // Handle joining team room (for managers)
+    // Managers can join a team room
     socket.on("join-team-room", (teamId) => {
       if (["Head_office", "ZSM", "ASM"].includes(socket.user.role)) {
         socket.join(`team-${teamId}`);
-        console.log(`User ${socket.user.id} joined team room: team-${teamId}`);
       }
     });
 
-    // Handle location updates
-    socket.on("location-update", (data) => {
-      // Broadcast to supervisor if user is TEAM
-      if (socket.user.role === "TEAM" && socket.user.supervisor) {
-        io.to(`supervisor-${socket.user.supervisor}`).emit("team-location-update", {
-          userId: socket.user.id,
-          location: data,
-          timestamp: new Date().toISOString()
-        });
-      }
-      
-      // Broadcast to all managers in Head_office
-      io.to("role-Head_office").emit("user-location-update", {
-        userId: socket.user.id,
-        location: data,
-        timestamp: new Date().toISOString()
-      });
-    });
+    // ✅ Register all location events from dedicated file
+    registerLocationEvents(socket);
 
-    // Handle typing indicators
+    // Typing indicators
     socket.on("typing", (data) => {
       socket.to(`user-${data.to}`).emit("user-typing", {
-        from: socket.user.id,
-        isTyping: data.isTyping
+        from:     socket.user.id,
+        isTyping: data.isTyping,
       });
     });
 
-    // Handle disconnection
+    // Disconnect — location cleanup is handled inside registerLocationEvents
     socket.on("disconnect", (reason) => {
       console.log(`User disconnected: ${socket.user.id} - Reason: ${reason}`);
-      
-      // Leave all rooms
-      socket.leave(`user-${socket.user.id}`);
-      socket.leave(`role-${socket.user.role}`);
-      if (socket.user.supervisor) {
-        socket.leave(`supervisor-${socket.user.supervisor}`);
-      }
     });
 
-    // Handle errors
     socket.on("error", (error) => {
       console.error(`Socket error for user ${socket.user.id}:`, error);
     });
@@ -116,8 +85,6 @@ export const initializeSocket = (server) => {
 };
 
 export const getIO = () => {
-  if (!io) {
-    throw new Error("Socket.io not initialized");
-  }
+  if (!io) throw new Error("Socket.io not initialized");
   return io;
 };

@@ -8,8 +8,7 @@ import { AppError } from "../errors/customError.js";
 import {
   getAddressFromCoords,
   calculateDistanceKm,
-  getTravelInfo,
-  getRouteBetweenPoints,
+
 } from "../utils/locationUtils.js";
 import { generateFullUrl } from '../utils/generateFullUrl.js';
 import { getIO } from "../helper/socket/index.js";

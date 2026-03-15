@@ -4,18 +4,38 @@ import mongoose from "mongoose";
 const locationPointSchema = new mongoose.Schema(
   {
     salesmanId: {
-      type:  mongoose.Schema.Types.ObjectId,
-      ref:   "User",
-      index: true,
+      type:     mongoose.Schema.Types.ObjectId,
+      ref:      "User",
+      required: true,   // ✅ FIX: was missing — orphaned points are now impossible
+      index:    true,
     },
     date: {
-      type:  String, // "YYYY-MM-DD"
-      index: true,
+      type:     String,  // "YYYY-MM-DD"
+      required: true,    // ✅ FIX: was missing — needed for compound index queries
+      index:    true,
     },
-    lat:      { type: Number, required: true },
-    lng:      { type: Number, required: true },
-    speed:    { type: Number, default: 0 },
-    accuracy: { type: Number, default: 0 },
+    lat: {
+      type:     Number,
+      required: true,
+      min:      -90,     // ✅ FIX: validate real lat range
+      max:      90,
+    },
+    lng: {
+      type:     Number,
+      required: true,
+      min:      -180,    // ✅ FIX: validate real lng range
+      max:      180,
+    },
+    speed: {
+      type:    Number,
+      default: 0,
+      min:     0,
+    },
+    accuracy: {
+      type:    Number,
+      default: 0,
+      min:     0,
+    },
     recordedAt: {
       type:    Date,
       default: Date.now,
@@ -25,13 +45,10 @@ const locationPointSchema = new mongoose.Schema(
   { timestamps: false }
 );
 
-// ✅ FIX: compound index for the most common query pattern
-//         (fetch all points for a salesman on a given date).
-//         Without this, Mongo had to scan two separate single-field indexes.
+// ✅ Compound index for most common query: all points for a salesman on a date
 locationPointSchema.index({ salesmanId: 1, date: 1 });
 
-// TTL index — auto-delete raw GPS points after 90 days to keep the collection lean.
-// Remove this if you need longer history.
+// ✅ TTL index — auto-delete raw GPS points after 90 days
 locationPointSchema.index(
   { recordedAt: 1 },
   { expireAfterSeconds: 60 * 60 * 24 * 90 }
