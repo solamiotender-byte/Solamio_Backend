@@ -16,7 +16,7 @@ const handleError = (error, defaultMessage) => {
 ========================================================== */
 export const register = async (userData) => {
   try {
-    const { email, phoneNumber, password } = userData;
+    const { email, phoneNumber } = userData;  // remove password from destructure
 
     const existingUser = await User.findOne({
       $or: [{ email }, { phoneNumber }],
@@ -24,12 +24,8 @@ export const register = async (userData) => {
 
     if (existingUser) throw new AppError("User already exists", 400);
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const newUser = new User({
-      ...userData,
-      password: hashedPassword,
-    });
+    // ✅ Pass plain password — the pre-save hook handles hashing
+    const newUser = new User({ ...userData });
 
     await newUser.save();
 
@@ -49,8 +45,8 @@ export const login = async ({ email, password }) => {
     const user = await User.findOne({ email }).select("+password");
     if (!user) throw new AppError("Invalid email or password", 400);
 
-    // const isMatch = await bcrypt.compare(password, user.password);
-    // if (!isMatch) throw new AppError("Invalid email or password", 400);
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) throw new AppError("Invalid email or password", 400);
 
     const token = user.generateAuthToken();
     const refreshToken = user.generateRefreshToken();
