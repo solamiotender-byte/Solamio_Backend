@@ -5,47 +5,55 @@ import {
   getLocationPointsController,
   getTodayLocationPathController,
   getLocationStatsController,
+  getTotalDistanceController,
   bulkCreateLocationPointsController,
+  deleteExpiredLocationPointsController,
 } from "../controllers/locationPoint.controller.js";
 import { authenticate, allowRoles } from "../middlewares/verifyToken.js";
 
 const router = express.Router();
 
-// ✅ All routes require a valid JWT
 router.use(authenticate);
 
-// ─── Salesman routes (any logged-in user can track themselves) ────────────────
-// POST /location/track       — save a single GPS point
-// POST /location/track/bulk  — save multiple GPS points (offline sync)
+// ─── Save points ──────────────────────────────────────────────────────────────
 router.post("/track",      createLocationPointController);
 router.post("/track/bulk", bulkCreateLocationPointsController);
 
-// ─── Admin / supervisor routes ────────────────────────────────────────────────
-// ✅ FIX: these were open to ALL authenticated users before.
-//    A salesman could pass any salesmanId and read someone else's trail.
-//    Now only Head_office, ZSM, ASM can query with an arbitrary salesmanId.
-//    Regular TEAM users hitting these routes without a salesmanId param
-//    will fall back to their own ID inside the controller — that's safe.
-
-// GET /location/             — get all points (admin: any user, self: own only)
+// ─── Read trail & stats ───────────────────────────────────────────────────────
 router.get(
   "/",
   allowRoles(["Head_office", "ZSM", "ASM", "TEAM"]),
   getLocationPointsController
 );
 
-// GET /location/today        — today's path polyline
+// GET /location/today?salesmanId=&startTime=<ISO>&endTime=<ISO>
+// Returns trail points for last 24h (or today if no time params)
 router.get(
   "/today",
   allowRoles(["Head_office", "ZSM", "ASM", "TEAM"]),
   getTodayLocationPathController
 );
 
-// GET /location/stats        — stats for a given day
+// GET /location/stats?salesmanId=&date=YYYY-MM-DD
 router.get(
   "/stats",
   allowRoles(["Head_office", "ZSM", "ASM", "TEAM"]),
   getLocationStatsController
+);
+
+// GET /location/distance?salesmanId=&date=YYYY-MM-DD
+// Returns { totalKm, totalPoints, firstRecorded, lastRecorded }
+router.get(
+  "/distance",
+  allowRoles(["Head_office", "ZSM", "ASM", "TEAM"]),
+  getTotalDistanceController
+);
+
+// DELETE /location/expired — manual cleanup trigger (optional, TTL handles it)
+router.delete(
+  "/expired",
+  allowRoles(["Head_office"]),
+  deleteExpiredLocationPointsController
 );
 
 export default router;
