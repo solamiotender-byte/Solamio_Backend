@@ -1,5 +1,5 @@
+// services/auth.service.js
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
 import User from "../models/user.model.js";
 import { AppError, NotFoundError } from "../errors/customError.js";
 
@@ -16,7 +16,7 @@ const handleError = (error, defaultMessage) => {
 ========================================================== */
 export const register = async (userData) => {
   try {
-    const { email, phoneNumber } = userData;  // remove password from destructure
+    const { email, phoneNumber } = userData;
 
     const existingUser = await User.findOne({
       $or: [{ email }, { phoneNumber }],
@@ -26,7 +26,6 @@ export const register = async (userData) => {
 
     // ✅ Pass plain password — the pre-save hook handles hashing
     const newUser = new User({ ...userData });
-
     await newUser.save();
 
     const result = newUser.toObject();
@@ -38,12 +37,18 @@ export const register = async (userData) => {
 };
 
 /* ==========================================================
-   USER LOGIN (Email + Password Only)
+   USER LOGIN
 ========================================================== */
 export const login = async ({ email, password }) => {
   try {
+    // ✅ Explicitly select password field (hidden by select: false in schema)
     const user = await User.findOne({ email }).select("+password");
     if (!user) throw new AppError("Invalid email or password", 400);
+
+    // ✅ Check if account is active
+    if (user.status === "inactive") {
+      throw new AppError("Your account has been deactivated. Contact admin.", 403);
+    }
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) throw new AppError("Invalid email or password", 400);
@@ -51,13 +56,21 @@ export const login = async ({ email, password }) => {
     const token = user.generateAuthToken();
     const refreshToken = user.generateRefreshToken();
 
-    user.token = token;
-    user.refreshToken = refreshToken;
-    user.lastLoginDate = new Date();
-    await user.save();
+    // ✅ Use findByIdAndUpdate instead of user.save()
+    //    This avoids triggering the pre-save hook which would re-hash the password
+    await User.findByIdAndUpdate(user._id, {
+      token,
+      refreshToken,
+      lastLoginDate: new Date(),
+    });
 
     const result = user.toObject();
     delete result.password;
+
+    // Attach fresh tokens to result since toObject() has old values
+    result.token = token;
+    result.refreshToken = refreshToken;
+
     return result;
   } catch (error) {
     handleError(error, "User login failed");
@@ -72,12 +85,14 @@ export const logout = async ({ userId }) => {
     const user = await User.findById(userId);
     if (!user) throw new NotFoundError("User", userId);
 
-    user.token = null;
-    user.refreshToken = null;
-    await user.save();
+    // ✅ Use findByIdAndUpdate to avoid triggering pre-save hook
+    await User.findByIdAndUpdate(userId, {
+      token: null,
+      refreshToken: null,
+    });
+
     return true;
   } catch (error) {
     handleError(error, "Logout failed");
   }
 };
-

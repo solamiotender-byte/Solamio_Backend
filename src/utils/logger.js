@@ -17,15 +17,21 @@ const LOG_LEVELS = {
   error: 0,
   warn: 1,
   info: 2,
-  debug: 3
+  debug: 3,
 };
 
 const currentLogLevel = process.env.LOG_LEVEL || "info";
 
 class Logger {
   constructor() {
-    this.logFile = path.join(logDir, `app-${new Date().toISOString().split('T')[0]}.log`);
-    this.errorLogFile = path.join(logDir, `error-${new Date().toISOString().split('T')[0]}.log`);
+    this.logFile = path.join(
+      logDir,
+      `app-${new Date().toISOString().split("T")[0]}.log`
+    );
+    this.errorLogFile = path.join(
+      logDir,
+      `error-${new Date().toISOString().split("T")[0]}.log`
+    );
   }
 
   formatMessage(level, message, meta = {}) {
@@ -33,9 +39,12 @@ class Logger {
     const logEntry = {
       timestamp,
       level,
-      message,
+      // ✅ Fix: safely serialize message if it's an object
+      message: typeof message === "object"
+        ? JSON.stringify(message)
+        : message,
       ...meta,
-      pid: process.pid
+      pid: process.pid,
     };
     return JSON.stringify(logEntry);
   }
@@ -53,18 +62,35 @@ class Logger {
       return;
     }
 
-    const formattedMessage = this.formatMessage(level, message, meta);
-    
-    // Console output with colors
+    // ✅ Fix: handle when message is an object (e.g. logger.error({...}))
+    const resolvedMessage =
+      typeof message === "object"
+        ? JSON.stringify(message, null, 2)
+        : message;
+
+    const resolvedMeta =
+      typeof message === "object" ? {} : meta;
+
+    const formattedMessage = this.formatMessage(level, resolvedMessage, resolvedMeta);
+
+    // Console colors
     const colors = {
       error: "\x1b[31m", // Red
       warn: "\x1b[33m",  // Yellow
       info: "\x1b[36m",  // Cyan
       debug: "\x1b[35m", // Magenta
-      reset: "\x1b[0m"
+      reset: "\x1b[0m",
     };
 
-    console.log(`${colors[level] || ""}[${level.toUpperCase()}]${colors.reset} ${message}`, meta);
+    // ✅ Fix: properly display meta if it has keys
+    const metaDisplay =
+      Object.keys(resolvedMeta).length > 0
+        ? "\n" + JSON.stringify(resolvedMeta, null, 2)
+        : "";
+
+    console.log(
+      `${colors[level] || ""}[${level.toUpperCase()}]${colors.reset} ${resolvedMessage}${metaDisplay}`
+    );
 
     // File output
     if (level === "error") {
