@@ -13,8 +13,9 @@
         index: true,
         default: null,
         unique: true,
+          sparse: true,
       },
-      phone: { type: String, trim: true, index: true, default: null, unique: true },
+      phone: { type: String, trim: true, index: true, default: null, unique: true ,  sparse: true, },
 
       /* 🔹 Visit */
       visitStatus: {

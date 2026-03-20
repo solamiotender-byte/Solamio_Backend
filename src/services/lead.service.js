@@ -196,6 +196,28 @@ export const createLeadService = async (data, currentUser) => {
       throw new AppError("Invalid or temporary email address", 400);
     }
 
+    // ✅ Duplicate phone check
+    if (data.phone) {
+      const phoneExists = await Lead.findOne({
+        phone: data.phone.trim(),
+        isDeleted: false,
+      });
+      if (phoneExists) {
+        throw new AppError("A lead with this phone number already exists", 409);
+      }
+    }
+
+    // ✅ Duplicate email check
+    if (data.email) {
+      const emailExists = await Lead.findOne({
+        email: data.email.trim().toLowerCase(),
+        isDeleted: false,
+      });
+      if (emailExists) {
+        throw new AppError("A lead with this email already exists", 409);
+      }
+    }
+
     // Default status
     const status = data.status || "New";
 
@@ -438,6 +460,36 @@ export const updateLeadService = async (id, data, userId) => {
     // 🔐 Email validation
     if (data.email && !isValidEmail(data.email)) {
       throw new AppError("Invalid or temporary email address", 400);
+    }
+
+    // ✅ Duplicate phone check (exclude current lead)
+    if (data.phone) {
+      const phoneExists = await Lead.findOne({
+        phone: data.phone.trim(),
+        isDeleted: false,
+        _id: { $ne: id },
+      });
+      if (phoneExists) {
+        throw new AppError(
+          "This phone number is already used by another lead",
+          409
+        );
+      }
+    }
+
+    // ✅ Duplicate email check (exclude current lead)
+    if (data.email) {
+      const emailExists = await Lead.findOne({
+        email: data.email.trim().toLowerCase(),
+        isDeleted: false,
+        _id: { $ne: id },
+      });
+      if (emailExists) {
+        throw new AppError(
+          "This email is already used by another lead",
+          409
+        );
+      }
     }
 
     const prevStatus = lead.status;
@@ -816,7 +868,7 @@ export const importLeadsFromFileService = async (file, userId) => {
         tempPath = `./temp/${Date.now()}-${file.originalname}`;
         const s3Object = await s3Client.send(
           new GetObjectCommand({
-            Bucket: BUCKET_NAME,
+            Bucket: process.env.AWS_BUCKET_NAME,
             Key: file.key,
           })
         );
@@ -1212,7 +1264,7 @@ export const uploadLeadService = async (id, data, userId, files = {}) => {
       });
     }
 
-    lead.documentStatus = data.documentStatus
+    lead.documentStatus = data.documentStatus;
     lead.documentSubmissionDate = new Date();
     lead.lastContactedAt = new Date();
 
@@ -2098,7 +2150,7 @@ export const uploadRegistrationDocumentService = async (
 
     /* 🔹 Save Document */
     lead.uploadDocument = {
-      key: fileKey, // important for future delete
+      key: fileKey,
       originalName: file.originalname,
       url: fileUrl,
       mimetype: file.mimetype,
@@ -2129,7 +2181,7 @@ export const uploadRegistrationDocumentService = async (
       "firstName lastName email phone role"
     );
   } catch (err) {
-    throw err; // handled by global error middleware
+    throw err;
   }
 };
 
@@ -2165,7 +2217,6 @@ export const uploadInstallationDocumentService = async (
     if (!lead) {
       throw new AppError("Lead not found or access denied", 404);
     }
-    //console.log("file locations", file.location)
 
     lead.installationDocument = {
       url: file.location,
