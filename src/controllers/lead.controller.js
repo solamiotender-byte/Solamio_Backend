@@ -73,7 +73,11 @@ export const updateLeadController = async (req, res, next) => {
 /* Delete Lead(s) - Single or Bulk */
 export const deleteLeadController = async (req, res, next) => {
   try {
-    const { ids } = req.body;
+    // ✅ Support both :id param (single) and body.ids (bulk)
+    const ids = req.params.id 
+      ? [req.params.id] 
+      : req.body.ids;
+
     if (!ids || (Array.isArray(ids) && ids.length === 0))
       throw new AppError("Lead ID(s) are required", 400);
 
