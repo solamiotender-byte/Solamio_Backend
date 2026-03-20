@@ -27,7 +27,7 @@ export const takeDBBackup = async () => {
       return;
     }
 
-    console.log(`✅ Backup created: ${backupFile}`);
+    //console.log(`✅ Backup created: ${backupFile}`);
     cleanOldBackups();
   });
 };
@@ -43,7 +43,7 @@ const cleanOldBackups = () => {
     const ageInDays = (now - stats.mtimeMs) / (1000 * 60 * 60 * 24);
     if (ageInDays > RETENTION_DAYS) {
       fs.unlinkSync(filePath);
-      console.log(`🗑️ Old backup removed: ${file}`);
+      //console.log(`🗑️ Old backup removed: ${file}`);
     }
   });
 };

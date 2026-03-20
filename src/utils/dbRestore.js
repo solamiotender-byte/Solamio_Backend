@@ -9,7 +9,7 @@ const BACKUP_DIR = process.env.BACKUP_DIR || "./backups";
 
 export const restoreLatestBackup = () => {
   if (!fs.existsSync(BACKUP_DIR)) {
-    console.log("⚠️ No backup directory found");
+    //console.log("⚠️ No backup directory found");
     return;
   }
 
@@ -19,7 +19,7 @@ export const restoreLatestBackup = () => {
     .sort();
 
   if (!backups.length) {
-    console.log("⚠️ No backups available to restore");
+    //console.log("⚠️ No backups available to restore");
     return;
   }
 
@@ -36,6 +36,6 @@ export const restoreLatestBackup = () => {
       return;
     }
 
-    console.log(`✅ Database restored from: ${latestBackup}`);
+    //console.log(`✅ Database restored from: ${latestBackup}`);
   });
 };

@@ -25,8 +25,8 @@ const startServer = async () => {
     await connectDB();
 
     server.listen(PORT, () => {
-      console.log(`🚀 Server running on port ${PORT}`);
-      console.log(`API → http://localhost:${PORT}/api/v1`);
+      //console.log(`🚀 Server running on port ${PORT}`);
+      //console.log(`API → http://localhost:${PORT}/api/v1`);
     });
 
     setupGracefulShutdown(server, io);
@@ -51,7 +51,7 @@ process.on("unhandledRejection", (err) => {
 });
 
 process.on("SIGINT", () => {
-  console.log("SIGINT received. Closing server...");
+  //console.log("SIGINT received. Closing server...");
   server.close(() => {
     mongoose.connection.close(false, () => {
       process.exit(0);

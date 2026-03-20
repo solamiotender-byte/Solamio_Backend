@@ -43,7 +43,7 @@ export const registerLocationEvents = (socket) => {
       });
     }
 
-    console.log(`[location:start] User ${socket.user.id} started tracking`);
+    //console.log(`[location:start] User ${socket.user.id} started tracking`);
   });
 
   // ── 2. Live GPS update (fires every N seconds from device) ──────────────────
@@ -159,7 +159,7 @@ export const registerLocationEvents = (socket) => {
         timestamp: new Date().toISOString(),
       });
 
-      console.log(`[location:bulk_sync] Saved ${docs.length} points for user ${userId}`);
+      //console.log(`[location:bulk_sync] Saved ${docs.length} points for user ${userId}`);
 
     } catch (error) {
       console.error(`[location:bulk_sync] Error for user ${socket.user.id}:`, error.message);
@@ -191,7 +191,7 @@ export const registerLocationEvents = (socket) => {
 
     const { userId } = data;
     socket.join(`watching-${userId}`);
-    console.log(`[location:watch_user] Admin ${socket.user.id} watching user ${userId}`);
+    //console.log(`[location:watch_user] Admin ${socket.user.id} watching user ${userId}`);
 
     // Send the latest known position immediately
     const latest = activeSalesmen.get(userId);
@@ -218,7 +218,7 @@ export const registerLocationEvents = (socket) => {
       });
     }
 
-    console.log(`[location:stop] User ${userId} stopped tracking`);
+    //console.log(`[location:stop] User ${userId} stopped tracking`);
   });
 
   // ── 7. Clean up on disconnect ────────────────────────────────────────────────

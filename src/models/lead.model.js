@@ -12,8 +12,9 @@
         trim: true,
         index: true,
         default: null,
+        unique: true,
       },
-      phone: { type: String, trim: true, index: true, default: null },
+      phone: { type: String, trim: true, index: true, default: null, unique: true },
 
       /* 🔹 Visit */
       visitStatus: {

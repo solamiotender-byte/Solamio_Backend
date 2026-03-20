@@ -30,7 +30,8 @@ export const register = async (userData) => {
 
     const result = newUser.toObject();
     delete result.password;
-    return result;
+    delete result.viewPassword;
+    return result; // createdAt included via timestamps:true
   } catch (error) {
     handleError(error, "User registration failed");
   }
@@ -47,13 +48,16 @@ export const login = async ({ email, password }) => {
 
     // ✅ Check if account is active
     if (user.status === "inactive") {
-      throw new AppError("Your account has been deactivated. Contact admin.", 403);
+      throw new AppError(
+        "Your account has been deactivated. Contact admin.",
+        403
+      );
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) throw new AppError("Invalid email or password", 400);
 
-    const token = user.generateAuthToken();
+    const token        = user.generateAuthToken();
     const refreshToken = user.generateRefreshToken();
 
     // ✅ Use findByIdAndUpdate instead of user.save()
@@ -67,9 +71,13 @@ export const login = async ({ email, password }) => {
     const result = user.toObject();
     delete result.password;
 
-    // Attach fresh tokens to result since toObject() has old values
-    result.token = token;
+    // ✅ Attach fresh tokens (toObject() has old/null values)
+    result.token        = token;
     result.refreshToken = refreshToken;
+
+    // ✅ Explicitly ensure createdAt is present (timestamps:true guarantees
+    //    it exists on the document — this just makes it explicit)
+    result.createdAt = user.createdAt;
 
     return result;
   } catch (error) {
@@ -87,7 +95,7 @@ export const logout = async ({ userId }) => {
 
     // ✅ Use findByIdAndUpdate to avoid triggering pre-save hook
     await User.findByIdAndUpdate(userId, {
-      token: null,
+      token:        null,
       refreshToken: null,
     });
 

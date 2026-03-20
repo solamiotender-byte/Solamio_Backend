@@ -234,7 +234,7 @@ export const deleteExpiredLocationPointsService = async () => {
   try {
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const result = await LocationPoint.deleteMany({ recordedAt: { $lt: cutoff } });
-    console.log(`[LocationCleanup] Deleted ${result.deletedCount} expired points`);
+    //console.log(`[LocationCleanup] Deleted ${result.deletedCount} expired points`);
     return result.deletedCount;
   } catch (e) {
     handleError(e, "Failed to delete expired location points");

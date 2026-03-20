@@ -4,7 +4,7 @@ import logger from "./logger.js";
 
 export const setupGracefulShutdown = (server, io) => {
   const gracefulShutdown = async (signal) => {
-    console.log(`\n👋 ${signal} received. Starting graceful shutdown...`);
+    //console.log(`\n👋 ${signal} received. Starting graceful shutdown...`);
     logger.info(`${signal} received, starting graceful shutdown`);
 
     // Set a timeout for forced shutdown
@@ -17,7 +17,7 @@ export const setupGracefulShutdown = (server, io) => {
     try {
       // 1. Stop accepting new connections
       server.close(() => {
-        console.log("✅ HTTP server closed");
+        //console.log("✅ HTTP server closed");
         logger.info("HTTP server closed");
       });
 
@@ -25,7 +25,7 @@ export const setupGracefulShutdown = (server, io) => {
       if (io) {
         await new Promise((resolve) => {
           io.close(() => {
-            console.log("✅ Socket.IO server closed");
+            //console.log("✅ Socket.IO server closed");
             logger.info("Socket.IO server closed");
             resolve();
           });
@@ -35,7 +35,7 @@ export const setupGracefulShutdown = (server, io) => {
       // 3. Close database connection
       if (mongoose.connection.readyState === 1) {
         await mongoose.connection.close(false);
-        console.log("✅ MongoDB connection closed");
+        //console.log("✅ MongoDB connection closed");
         logger.info("MongoDB connection closed");
       }
 
@@ -45,7 +45,7 @@ export const setupGracefulShutdown = (server, io) => {
       // Clear the force shutdown timeout
       clearTimeout(forceShutdownTimeout);
 
-      console.log("💤 Graceful shutdown completed");
+      //console.log("💤 Graceful shutdown completed");
       logger.info("Graceful shutdown completed");
 
       process.exit(0);

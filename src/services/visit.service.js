@@ -214,7 +214,7 @@ export const createVisitService = async (data, currentUser, files = []) => {
     if (isLeadCreate) {
       try {
         createdLead = await createLeadFromVisit(visit, data, session);
-        console.log(`Lead created successfully: ${createdLead._id}`);
+        //console.log(`Lead created successfully: ${createdLead._id}`);
       } catch (leadError) {
         console.error("Failed to create lead:", leadError);
         // Don't throw here - we still want to save the visit even if lead creation fails
@@ -459,7 +459,7 @@ export const getVisitByIdService = async (visitId, currentUser) => {
 ========================================================= */
 export const updateVisitService = async (visitId, data, currentUser) => {
 
-  console.log("data1111..", visitId, data, currentUser)
+  //console.log("data1111..", visitId, data, currentUser)
   const visit = await Visit.findById(visitId);
 
   if (!visit) throw new AppError("Visit not found", 404);

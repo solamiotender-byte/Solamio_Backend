@@ -2165,7 +2165,7 @@ export const uploadInstallationDocumentService = async (
     if (!lead) {
       throw new AppError("Lead not found or access denied", 404);
     }
-    console.log("file locations", file.location)
+    //console.log("file locations", file.location)
 
     lead.installationDocument = {
       url: file.location,

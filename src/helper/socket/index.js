@@ -43,7 +43,7 @@ export const initializeSocket = (server) => {
 
   // ── Connection handler ───────────────────────────────────────────────────────
   io.on("connection", (socket) => {
-    console.log(`User connected: ${socket.user.id} (${socket.user.role})`);
+    //console.log(`User connected: ${socket.user.id} (${socket.user.role})`);
 
     // Join personal + role rooms
     socket.join(`user-${socket.user.id}`);
@@ -73,7 +73,7 @@ export const initializeSocket = (server) => {
 
     // Disconnect — location cleanup is handled inside registerLocationEvents
     socket.on("disconnect", (reason) => {
-      console.log(`User disconnected: ${socket.user.id} - Reason: ${reason}`);
+      //console.log(`User disconnected: ${socket.user.id} - Reason: ${reason}`);
     });
 
     socket.on("error", (error) => {

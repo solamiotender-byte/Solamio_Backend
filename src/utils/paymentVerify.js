@@ -63,7 +63,7 @@ export const initiatePhonePePayment = async (req, res) => {
 export const phonePeWebhook = async (req, res) => {
   try {
     const payload = req.body;
-    console.log("PhonePe Webhook Data:", payload);
+    //console.log("PhonePe Webhook Data:", payload);
 
     const { transactionId, code, data } = payload;
 

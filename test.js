@@ -91,5 +91,5 @@ export const getDistanceAndAddress = async (
     20.2727643, 85.8334598  // Khordha
   );
 
-  console.log(JSON.stringify(result, null, 2));
+  //console.log(JSON.stringify(result, null, 2));
 })();

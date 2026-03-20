@@ -324,7 +324,7 @@ export const getBankAtPendingController = async (req, res, next) => {
 
 export const registrationUploadController = async (req, res, next) => {
   try {
-    console.log("data files..", req.file)
+    //console.log("data files..", req.file)
     const data = await uploadRegistrationDocumentService(
       req.params.id,
       req.user._id,
@@ -339,7 +339,7 @@ export const registrationUploadController = async (req, res, next) => {
 
 export const installationUploadController = async (req, res, next) => {
   try {
-    console.log("data files..", req.file)
+    //console.log("data files..", req.file)
     const data = await uploadInstallationDocumentService(
       req.params.id,
       req.user._id,

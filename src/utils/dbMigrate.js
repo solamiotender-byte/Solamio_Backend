@@ -13,6 +13,6 @@ export const copyDatabase = () => {
       console.error("❌ DB Copy Failed:", error.message);
       return;
     }
-    console.log("✅ Database copied to secondary DB successfully");
+    //console.log("✅ Database copied to secondary DB successfully");
   });
 };

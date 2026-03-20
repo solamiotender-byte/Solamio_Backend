@@ -3,14 +3,14 @@ import BatteryLog from "../models/Batterylog.js";
 export const logBattery = async (req, res) => {
   try {
     const { userId, percentage, isCharging, deviceInfo } = req.body;
-    console.log("🔋 logBattery HIT — userId:", userId, "| %:", percentage);
+    //console.log("🔋 logBattery HIT — userId:", userId, "| %:", percentage);
 
     if (!userId || percentage === undefined) {
       return res.status(400).json({ success: false, error: "userId and percentage are required" });
     }
 
     const log = await BatteryLog.create({ userId, percentage, isCharging, deviceInfo });
-    console.log("🔋 Saved to DB — _id:", log._id, "| %:", log.percentage);
+    //console.log("🔋 Saved to DB — _id:", log._id, "| %:", log.percentage);
 
     res.status(201).json({ success: true, data: log });
   } catch (err) {
@@ -54,7 +54,7 @@ export const getAllLatestBattery = async (req, res) => {
         },
       },
     ]);
-    console.log("🔋 getAllLatestBattery — count:", logs.length);
+    //console.log("🔋 getAllLatestBattery — count:", logs.length);
     res.json({ success: true, data: logs });
   } catch (err) {
     console.error("🔋 getAllLatestBattery ERROR:", err.message);

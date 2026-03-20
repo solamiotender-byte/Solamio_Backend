@@ -65,7 +65,7 @@ export const getAllLeadsReportService = async (query, user) => {
     .populate("createdBy", "firstName lastName role")
     .lean();
 
-    console.log("leads...", leads)
+    //console.log("leads...", leads)
 
   return {
     totalLeads: leads.length,

@@ -1,3 +1,4 @@
+// services/user.service.js
 import User from "../models/user.model.js";
 import {
   AppError,
@@ -29,20 +30,13 @@ export const createUserService = async (data, createdById) => {
     };
 
     if (createdBy.role === "Head_office") {
-      // Head office can create any role except another Head_office (only existing can create)
       if (role === "Head_office" && createdBy.role !== "Head_office") {
-        throw new AppError(
-          "Only Head Office can create Head Office users",
-          403
-        );
+        throw new AppError("Only Head Office can create Head Office users", 403);
       }
     } else if (allowedRoles[createdBy.role]) {
-      // Check if role is allowed for creator
       if (!allowedRoles[createdBy.role].includes(role)) {
         throw new AppError(
-          `You can only create users with roles: ${allowedRoles[
-            createdBy.role
-          ].join(", ")}`,
+          `You can only create users with roles: ${allowedRoles[createdBy.role].join(", ")}`,
           403
         );
       }
@@ -68,13 +62,9 @@ export const createUserService = async (data, createdById) => {
       const supervisorUser = await User.findById(supervisor);
       if (!supervisorUser) throw new NotFoundError("Supervisor", supervisor);
 
-      // Ensure supervisor has appropriate role
       const validSupervisorRoles = ["ZSM", "ASM", "Head_office"];
       if (!validSupervisorRoles.includes(supervisorUser.role)) {
-        throw new ValidationError(
-          "Supervisor must be ZSM, ASM, or Head_office",
-          400
-        );
+        throw new ValidationError("Supervisor must be ZSM, ASM, or Head_office", 400);
       }
     }
 
@@ -82,19 +72,18 @@ export const createUserService = async (data, createdById) => {
     const newUser = new User({
       ...data,
       email: email.toLowerCase(),
-      supervisor:
-        supervisor || (createdBy.role === "ASM" ? createdBy._id : null),
+      supervisor: supervisor || (createdBy.role === "ASM" ? createdBy._id : null),
       createdBy: createdBy._id,
-      viewPassword: data.password, // Store for admin viewing
+      viewPassword: data.password,
       status: data.status || "active",
     });
 
     await newUser.save();
 
-    // Return user without sensitive data
     const userObj = newUser.toObject({ getters: true, virtuals: true });
     delete userObj.viewPassword;
     delete userObj.password;
+    // ✅ createdAt is included via timestamps:true
 
     return userObj;
   } catch (error) {
@@ -102,7 +91,9 @@ export const createUserService = async (data, createdById) => {
   }
 };
 
-
+/* ============================
+  Get Users with filters
+============================ */
 export const getUsersService = async (query, currentUser) => {
   try {
     const {
@@ -119,6 +110,7 @@ export const getUsersService = async (query, currentUser) => {
        🔒 TEAM → ONLY SELF (HARD OVERRIDE)
     ================================================= */
     if (currentUser.role === "TEAM") {
+      // ✅ Using select("-password -viewPassword") keeps createdAt (it's not excluded)
       const user = await User.findById(currentUser._id)
         .select("-password -viewPassword")
         .populate("supervisor", "firstName lastName role email")
@@ -143,66 +135,33 @@ export const getUsersService = async (query, currentUser) => {
     const filter = {};
     const andConditions = [];
 
-    /* =================================================
-       SEARCH FILTER
-    ================================================= */
     if (search) {
       andConditions.push({
         $or: [
           { firstName: { $regex: search, $options: "i" } },
-          { lastName: { $regex: search, $options: "i" } },
-          { email: { $regex: search, $options: "i" } },
+          { lastName:  { $regex: search, $options: "i" } },
+          { email:     { $regex: search, $options: "i" } },
           { phoneNumber: { $regex: search, $options: "i" } },
         ],
       });
     }
 
-    /* =================================================
-       ROLE & STATUS FILTER
-    ================================================= */
-    if (role && role !== "all") {
-      andConditions.push({ role });
-    }
-
-    if (status && status !== "all") {
-      andConditions.push({ status });
-    }
-
-    /* =================================================
-       ROLE BASED PERMISSION LOGIC
-    ================================================= */
-
-    // 1️⃣ Head Office → See ALL (no filter)
+    if (role && role !== "all")     andConditions.push({ role });
+    if (status && status !== "all") andConditions.push({ status });
 
     if (currentUser.role === "ZSM") {
-      // 2️⃣ ZSM → All except Head Office
-      andConditions.push({
-        role: { $ne: "Head_office" },
-      });
+      andConditions.push({ role: { $ne: "Head_office" } });
     }
 
     if (currentUser.role === "ASM") {
-      // 3️⃣ ASM → Only own TEAM
-      andConditions.push({
-        supervisor: currentUser._id,
-        role: "TEAM",
-      });
+      andConditions.push({ supervisor: currentUser._id, role: "TEAM" });
     }
 
-    if (andConditions.length > 0) {
-      filter.$and = andConditions;
-    }
+    if (andConditions.length > 0) filter.$and = andConditions;
 
-    /* =================================================
-       SORTING
-    ================================================= */
-    const sort = {
-      [sortBy]: sortOrder === "desc" ? -1 : 1,
-    };
+    const sort = { [sortBy]: sortOrder === "desc" ? -1 : 1 };
 
-    /* =================================================
-       FETCH USERS
-    ================================================= */
+    // ✅ "-password -viewPassword" keeps createdAt in results
     const users = await User.find(filter)
       .select("-password -viewPassword")
       .populate("supervisor", "firstName lastName role email")
@@ -217,8 +176,8 @@ export const getUsersService = async (query, currentUser) => {
       users,
       pagination: {
         total,
-        page: Number(page),
-        limit: Number(limit),
+        page:       Number(page),
+        limit:      Number(limit),
         totalPages: Math.ceil(total / Number(limit)),
       },
       filters: { search, role, status },
@@ -228,12 +187,12 @@ export const getUsersService = async (query, currentUser) => {
   }
 };
 
-
 /* ============================
   Get User Profile
 ============================ */
 export const getUserProfileService = async (userId, currentUser) => {
   try {
+    // ✅ "-password -viewPassword" keeps createdAt
     const user = await User.findById(userId)
       .select("-password -viewPassword")
       .populate("supervisor", "firstName lastName role email")
@@ -241,15 +200,11 @@ export const getUserProfileService = async (userId, currentUser) => {
 
     if (!user) throw new NotFoundError("User", userId);
 
-    // Permission check
     if (
       currentUser.role === "ASM" &&
       user.supervisor?.toString() !== currentUser._id.toString()
     ) {
-      throw new AppError(
-        "You can only view profiles of users under your supervision",
-        403
-      );
+      throw new AppError("You can only view profiles of users under your supervision", 403);
     } else if (currentUser.role === "ZSM") {
       const asmUsers = await User.find({
         supervisor: currentUser._id,
@@ -258,15 +213,11 @@ export const getUserProfileService = async (userId, currentUser) => {
       const asmIds = asmUsers.map((u) => u._id);
 
       if (
-        ![
-          currentUser._id.toString(),
-          ...asmIds.map((id) => id.toString()),
-        ].includes(user.supervisor?.toString())
+        ![currentUser._id.toString(), ...asmIds.map((id) => id.toString())].includes(
+          user.supervisor?.toString()
+        )
       ) {
-        throw new AppError(
-          "You can only view profiles of users under your zone",
-          403
-        );
+        throw new AppError("You can only view profiles of users under your zone", 403);
       }
     } else if (
       !["Head_office", "ZSM", "ASM"].includes(currentUser.role) &&
@@ -282,47 +233,35 @@ export const getUserProfileService = async (userId, currentUser) => {
 };
 
 /* ============================
-   Update User (No Role Logic)
+   Update User
 ============================ */
 export const updateUserService = async (userId, data) => {
   try {
-
     const user = await User.findById(userId);
     if (!user) throw new NotFoundError("User", userId);
 
-    /** ✅ Allowed fields to update */
-    const allowedFields = [
-      "firstName",
-      "lastName",
-      "email",
-      "phone",
-      "role",
-      "status"
-    ];
+    const allowedFields = ["firstName", "lastName", "email", "phone", "role", "status"];
 
     Object.keys(data).forEach((key) => {
-      if (!allowedFields.includes(key)) {
-        delete data[key];
-      }
+      if (!allowedFields.includes(key)) delete data[key];
     });
 
     Object.keys(data).forEach((key) => {
-      if (data[key] !== undefined) {
-        user[key] = data[key];
-      }
+      if (data[key] !== undefined) user[key] = data[key];
     });
 
     await user.save();
+
     const updatedUser = user.toObject({ getters: true });
     delete updatedUser.password;
     delete updatedUser.viewPassword;
+    // ✅ createdAt preserved via toObject()
 
     return updatedUser;
   } catch (error) {
     handleError(error, "Failed to update user");
   }
 };
-
 
 /* ============================
   Toggle User Status
@@ -332,18 +271,13 @@ export const toggleUserStatusService = async (userId, currentUser) => {
     const user = await User.findById(userId);
     if (!user) throw new NotFoundError("User", userId);
 
-    // Prevent self-status change
     if (user._id.toString() === currentUser._id.toString()) {
       throw new AppError("You cannot change your own status", 400);
     }
 
-    // Permission check
     if (currentUser.role === "ASM") {
       if (user.supervisor?.toString() !== currentUser._id.toString()) {
-        throw new AppError(
-          "You can only toggle status of users under your supervision",
-          403
-        );
+        throw new AppError("You can only toggle status of users under your supervision", 403);
       }
     } else if (currentUser.role === "ZSM") {
       const asmUsers = await User.find({
@@ -352,22 +286,13 @@ export const toggleUserStatusService = async (userId, currentUser) => {
       }).select("_id");
       const asmIds = asmUsers.map((u) => u._id);
 
-      if (
-        !asmIds.map((id) => id.toString()).includes(user.supervisor?.toString())
-      ) {
-        throw new AppError(
-          "You can only toggle status of users in your zone",
-          403
-        );
+      if (!asmIds.map((id) => id.toString()).includes(user.supervisor?.toString())) {
+        throw new AppError("You can only toggle status of users in your zone", 403);
       }
     } else if (currentUser.role !== "Head_office") {
-      throw new AppError(
-        "You don't have permission to toggle user status",
-        403
-      );
+      throw new AppError("You don't have permission to toggle user status", 403);
     }
 
-    // Prevent status change for Head_office
     if (
       user.role === "Head_office" &&
       currentUser._id.toString() !== user._id.toString()
@@ -375,16 +300,13 @@ export const toggleUserStatusService = async (userId, currentUser) => {
       throw new AppError("Cannot change status of Head Office users", 403);
     }
 
-    // Toggle status
     user.status = user.status === "active" ? "inactive" : "active";
     await user.save();
 
     return {
-      userId: user._id,
+      userId:    user._id,
       newStatus: user.status,
-      message: `User ${
-        user.status === "active" ? "activated" : "deactivated"
-      } successfully`,
+      message:   `User ${user.status === "active" ? "activated" : "deactivated"} successfully`,
     };
   } catch (error) {
     handleError(error, "Failed to toggle user status");
@@ -401,7 +323,6 @@ export const getViewPasswordService = async (userId, currentUser) => {
     }
 
     const user = await User.findById(userId);
-    console.log("user11..", user);
     if (!user) throw new NotFoundError("User", userId);
 
     if (!user.viewPassword) {
@@ -409,10 +330,10 @@ export const getViewPasswordService = async (userId, currentUser) => {
     }
 
     return {
-      userId: user._id,
-      email: user.email,
+      userId:      user._id,
+      email:       user.email,
       viewPassword: user.viewPassword,
-      expiresAt: new Date(Date.now() + 5 * 60000), // Expires in 5 minutes
+      expiresAt:   new Date(Date.now() + 5 * 60000),
     };
   } catch (error) {
     handleError(error, "Failed to retrieve password");
@@ -427,17 +348,14 @@ export const deleteUserService = async (userId, currentUser) => {
     const user = await User.findById(userId);
     if (!user) throw new NotFoundError("User", userId);
 
-    // Prevent self-deletion
     if (user._id.toString() === currentUser._id.toString()) {
       throw new AppError("You cannot delete your own account", 400);
     }
 
-    // Prevent deletion of Head_office by non-Head_office
     if (user.role === "Head_office" && currentUser.role !== "Head_office") {
       throw new AppError("Only Head Office can delete Head Office users", 403);
     }
 
-    // Check if user has any subordinates
     const hasSubordinates = await User.exists({ supervisor: userId });
     if (hasSubordinates) {
       throw new AppError(
@@ -450,11 +368,7 @@ export const deleteUserService = async (userId, currentUser) => {
 
     return {
       message: "User deleted successfully",
-      deletedUser: {
-        id: user._id,
-        email: user.email,
-        role: user.role,
-      },
+      deletedUser: { id: user._id, email: user.email, role: user.role },
     };
   } catch (error) {
     handleError(error, "Failed to delete user");
@@ -464,53 +378,42 @@ export const deleteUserService = async (userId, currentUser) => {
 /* ============================
   Assign User to Manager
 ============================ */
-export const assignUserToManagerService = async (
-  userId,
-  managerId,
-  currentUser
-) => {
+export const assignUserToManagerService = async (userId, managerId, currentUser) => {
   try {
-    // Permission check
     if (!["Head_office", "ZSM"].includes(currentUser.role)) {
       throw new AppError("Only Head Office or ZSM can assign users", 403);
     }
 
-    const user = await User.findById(userId);
+    const user    = await User.findById(userId);
     if (!user) throw new NotFoundError("User", userId);
 
     const manager = await User.findById(managerId);
     if (!manager) throw new NotFoundError("Manager", managerId);
 
-    // Validate manager role
     if (!["ZSM", "ASM"].includes(manager.role)) {
       throw new ValidationError("Selected user must be ZSM or ASM", 400);
     }
 
-    // Check if assignment is valid based on hierarchy
     if (
       currentUser.role === "ZSM" &&
       manager.role === "ZSM" &&
       manager._id.toString() !== currentUser._id.toString()
     ) {
-      throw new AppError(
-        "ZSM can only assign to themselves or their ASMs",
-        403
-      );
+      throw new AppError("ZSM can only assign to themselves or their ASMs", 403);
     }
 
-    // Update user's supervisor
     user.supervisor = manager._id;
     await user.save();
 
     return {
       message: "User assigned to manager successfully",
       user: {
-        id: user._id,
+        id:   user._id,
         name: `${user.firstName} ${user.lastName}`,
         role: user.role,
       },
       manager: {
-        id: manager._id,
+        id:   manager._id,
         name: `${manager.firstName} ${manager.lastName}`,
         role: manager.role,
       },
@@ -522,7 +425,6 @@ export const assignUserToManagerService = async (
 
 /* ==========================================
    Get TEAM List
-   Access: Head_office, ZSM, ASM
 ========================================== */
 export const getTeamUnderAsmList = async (query, userId) => {
   try {
@@ -536,16 +438,14 @@ export const getTeamUnderAsmList = async (query, userId) => {
     } = query;
 
     const skip = (page - 1) * limit;
- 
     let filter = { role: "TEAM" };
 
-    /** 🔍 Search */
     if (search) {
       filter.$or = [
         { firstName: new RegExp(search, "i") },
-        { lastName: new RegExp(search, "i") },
-        { email: new RegExp(search, "i") },
-        { phone: new RegExp(search, "i") },
+        { lastName:  new RegExp(search, "i") },
+        { email:     new RegExp(search, "i") },
+        { phone:     new RegExp(search, "i") },
       ];
     }
 
@@ -553,6 +453,7 @@ export const getTeamUnderAsmList = async (query, userId) => {
 
     const sort = { [sortBy]: sortOrder === "desc" ? -1 : 1 };
 
+    // ✅ createdAt included — only password & viewPassword excluded
     const users = await User.find(filter)
       .select("-password -viewPassword")
       .populate("supervisor", "firstName lastName role email")
@@ -567,8 +468,8 @@ export const getTeamUnderAsmList = async (query, userId) => {
       users,
       pagination: {
         total,
-        page: Number(page),
-        limit: Number(limit),
+        page:       Number(page),
+        limit:      Number(limit),
         totalPages: Math.ceil(total / limit),
       },
     };
@@ -578,7 +479,7 @@ export const getTeamUnderAsmList = async (query, userId) => {
 };
 
 /* ============================
-  Get Manager List (Only Head_office & ZSM)
+  Get Manager List
 ============================ */
 export const getManagerList = async (query) => {
   try {
@@ -597,9 +498,9 @@ export const getManagerList = async (query) => {
     if (search) {
       filter.$or = [
         { firstName: new RegExp(search, "i") },
-        { lastName: new RegExp(search, "i") },
-        { email: new RegExp(search, "i") },
-        { phone: new RegExp(search, "i") },
+        { lastName:  new RegExp(search, "i") },
+        { email:     new RegExp(search, "i") },
+        { phone:     new RegExp(search, "i") },
       ];
     }
 
@@ -607,6 +508,7 @@ export const getManagerList = async (query) => {
 
     const sort = { [sortBy]: sortOrder === "desc" ? -1 : 1 };
 
+    // ✅ createdAt included — only password & viewPassword excluded
     const users = await User.find(filter)
       .select("-password -viewPassword")
       .populate("supervisor", "firstName lastName role email")
@@ -621,8 +523,8 @@ export const getManagerList = async (query) => {
       users,
       pagination: {
         total,
-        page: Number(page),
-        limit: Number(limit),
+        page:       Number(page),
+        limit:      Number(limit),
         totalPages: Math.ceil(total / limit),
       },
     };
