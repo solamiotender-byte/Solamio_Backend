@@ -1,3 +1,4 @@
+// FIXED: /:id moved to bottom, router.param only applies to ID routes
 import { Router } from "express";
 import { authenticate, allowRoles } from "../middlewares/verifyToken.js";
 import { upload } from "../middlewares/upload.js";
@@ -19,69 +20,72 @@ import {
 
 const router = Router();
 
-
 /* =========================================================
    ROLE CONSTANTS
 ========================================================= */
-const ALL_ROLES = ["Head_office", "ZSM", "ASM", "TEAM"];
+const ALL_ROLES     = ["Head_office", "ZSM", "ASM", "TEAM"];
 const MANAGER_ROLES = ["Head_office", "ZSM", "ASM"];
-const HEAD_OFFICE_ONLY = ["Head_office", "ZSM"];
-const HEAD_OFFICE = ["Head_office"]
 
 // Apply authentication to all routes
 router.use(authenticate);
 
 /* =========================================================
-   PUBLIC ROUTES (All authenticated users)
+   STATIC / NAMED ROUTES — must come before /:id
 ========================================================= */
 
 // Get all visits with filters
 router.get("/", allowRoles(ALL_ROLES), getAllVisitsController);
 
-// Get visit by ID
-router.get("/:id", allowRoles(ALL_ROLES), getVisitByIdController);
-
-// Get recent activity
+// Recent activity
 router.get("/activity/recent", allowRoles(ALL_ROLES), getRecentActivityController);
 
-// Get visit stats
+// Visit stats
 router.get("/stats/overview", allowRoles(ALL_ROLES), getVisitStatsController);
 
-// Get team performance (managers only for team view, TEAM for self)
+// Team performance (managers + TEAM self-view)
 router.get("/performance/team", allowRoles(ALL_ROLES), getTeamPerformanceController);
 
-// Get my performance (for TEAM role)
+// My performance (TEAM role only)
 router.get("/performance/me", allowRoles(["TEAM"]), getMyPerformanceController);
 
 // Export visits
 router.get("/export/data", allowRoles(MANAGER_ROLES), exportVisitsController);
 
+// Team by supervisor
+router.get("/team/supervisor/:supervisorId", allowRoles(MANAGER_ROLES), getTeamBySupervisorController);
+
+// Team member performance
+router.get("/performance/team-member/:memberId", allowRoles(ALL_ROLES), getTeamMemberPerformance);
+
 /* =========================================================
-   PROTECTED ROUTES (Create/Update)
+   CREATE / UPDATE ROUTES
 ========================================================= */
 
 // Create new visit (with photo upload)
 router.post(
   "/",
   allowRoles(ALL_ROLES),
-  upload.array("photos", 10), // Max 10 photos
+  upload.array("photos", 10),
   createVisitController
 );
 
 // Update visit
 router.put("/:id", allowRoles(ALL_ROLES), updateVisitController);
+
 // Complete visit
 router.patch("/:id/complete", allowRoles(ALL_ROLES), completeVisitController);
 
-router.get("/team/supervisor/:supervisorId", allowRoles(MANAGER_ROLES), getTeamBySupervisorController);
-router.get("/performance/team-member/:memberId", allowRoles(ALL_ROLES), getTeamMemberPerformance);
+/* =========================================================
+   /:id ROUTE — MUST BE LAST (catches anything not matched above)
+========================================================= */
+router.get("/:id", allowRoles(ALL_ROLES), getVisitByIdController);
 
 /* =========================================================
    VALIDATION MIDDLEWARE
 ========================================================= */
 
-// Validate visit ID parameter
-router.param('id', (req, res, next, id) => {
+// Validate visit ID parameter — only runs for routes with :id
+router.param("id", (req, res, next, id) => {
   if (!id.match(/^[0-9a-fA-F]{24}$/)) {
     return next(new AppError("Invalid visit ID format", 400));
   }
