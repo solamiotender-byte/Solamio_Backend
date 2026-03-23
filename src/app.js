@@ -9,7 +9,8 @@ import hpp from "hpp";
 
 import apiV1Router from "./routes/index.js";
 import globalErrorHandler from "./middlewares/globalErrorHandler.js";
-
+import dns from "dns"
+dns.setServers(["1.1.1.1","8.8.8.8"])
 // 🔁 Cron Jobs
 import {
   startHourlyBackup,

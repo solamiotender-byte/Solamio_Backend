@@ -18,10 +18,9 @@ export const createLeadValidation = [
     .withMessage("Invalid email address"),
 
   body("phone")
-    .notEmpty()
-    .withMessage("Phone number is required")
-    .matches(/^[0-9]{7,15}$/)
-    .withMessage("Phone must be 7 to 15 digits only"),
+     .optional()                          // ← change notEmpty() to optional()
+  .matches(/^[0-9]{7,15}$/)
+  .withMessage("Phone must be 7 to 15 digits only"),
 ];
 
 export const updateLeadValidation = [

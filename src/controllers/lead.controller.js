@@ -33,6 +33,7 @@ import { AppError } from "../errors/customError.js";
 /* Create Lead */
 export const createLeadController = async (req, res, next) => {
   try {
+     console.log("CREATE LEAD BODY:", JSON.stringify(req.body, null, 2))
     const lead = await createLeadService(req.body, req.user);
     sendResponse(res, 201, "Lead created successfully", lead);
   } catch (error) {

@@ -111,7 +111,7 @@ export const getLeadVisibilityFilter = async (currentUser) => {
 // Stage-specific field validators
 const getStageFields = (stage) => {
   const stageFields = {
-    Visit: ["visitStatus", "visitDate", "visitTime", "visitLocation"],
+  Visit: ["visitStatus", "visitDate", "visitTime", "visitLocation", "visitNotes"],
     Registration: [
       "address",
       "city",
@@ -183,89 +183,131 @@ const validateStageData = (stage, data) => {
 
 
 /* 🔹 CREATE LEAD */
+/* 🔹 CREATE LEAD */
 export const createLeadService = async (data, currentUser) => {
   try {
-
-    // Validate current user
     if (!currentUser || !currentUser._id) {
       throw new AppError("Invalid user", 400);
     }
 
-    // 🔐 Email validation
     if (data.email && !isValidEmail(data.email)) {
       throw new AppError("Invalid or temporary email address", 400);
     }
 
-    // ✅ Duplicate phone check
+    // ── PHONE DUPLICATE: update existing lead's visitNotes instead of erroring ──
     if (data.phone) {
       const phoneExists = await Lead.findOne({
         phone: data.phone.trim(),
         isDeleted: false,
       });
       if (phoneExists) {
+        // If this is a visit creation (has visitNotes/visitLocation), update and return
+        if (data.visitNotes || data.visitLocation || data.remarks) {
+          if (data.visitNotes?.trim() || data.remarks?.trim()) {
+            phoneExists.visitNotes    = data.visitNotes?.trim() || data.remarks?.trim();
+          }
+          if (data.visitLocation?.trim()) {
+            phoneExists.visitLocation = data.visitLocation.trim();
+          }
+          if (data.visitStatus) {
+            phoneExists.visitStatus   = data.visitStatus;
+          }
+          phoneExists.lastContactedAt = new Date();
+          phoneExists.stageTimeline.push({
+            stage:       phoneExists.status,
+            notes:       data.visitNotes?.trim() || data.remarks?.trim() || "Visit updated",
+            updatedBy:   currentUser._id,
+            updatedRole: currentUser.role,
+            updatedAt:   new Date(),
+          });
+          await phoneExists.save();
+          return await Lead.findById(phoneExists._id)
+            .populate("assignedManager", "firstName lastName email role")
+            .populate("assignedUser",    "firstName lastName email role")
+            .populate("createdBy",       "firstName lastName email role");
+        }
         throw new AppError("A lead with this phone number already exists", 409);
       }
     }
 
-    // ✅ Duplicate email check
+    // ── EMAIL DUPLICATE: same pattern ────────────────────────────────────────
     if (data.email) {
       const emailExists = await Lead.findOne({
         email: data.email.trim().toLowerCase(),
         isDeleted: false,
       });
       if (emailExists) {
+        if (data.visitNotes || data.visitLocation || data.remarks) {
+          if (data.visitNotes?.trim() || data.remarks?.trim()) {
+            emailExists.visitNotes    = data.visitNotes?.trim() || data.remarks?.trim();
+          }
+          if (data.visitLocation?.trim()) {
+            emailExists.visitLocation = data.visitLocation.trim();
+          }
+          if (data.visitStatus) {
+            emailExists.visitStatus   = data.visitStatus;
+          }
+          emailExists.lastContactedAt = new Date();
+          emailExists.stageTimeline.push({
+            stage:       emailExists.status,
+            notes:       data.visitNotes?.trim() || data.remarks?.trim() || "Visit updated",
+            updatedBy:   currentUser._id,
+            updatedRole: currentUser.role,
+            updatedAt:   new Date(),
+          });
+          await emailExists.save();
+          return await Lead.findById(emailExists._id)
+            .populate("assignedManager", "firstName lastName email role")
+            .populate("assignedUser",    "firstName lastName email role")
+            .populate("createdBy",       "firstName lastName email role");
+        }
         throw new AppError("A lead with this email already exists", 409);
       }
     }
 
-    // Default status
     const status = data.status || "New";
 
     const leadData = {
-      firstName: data.firstName?.trim() || null,
-      lastName: data.lastName?.trim() || null,
-      email: data.email?.trim().toLowerCase() || null,
-      phone: data.phone?.trim() || null,
-      source: data.source || "Website",
-      status: status,
-      createdBy: currentUser._id,
-
+      firstName:  data.firstName?.trim() || null,
+      lastName:   data.lastName?.trim()  || null,
+      email:      data.email?.trim().toLowerCase() || null,
+      phone:      data.phone?.trim()     || null,
+      source:     data.source            || "Website",
+      status:     status,
+      createdBy:  currentUser._id,
       stageTimeline: [
         {
-          stage: status,
-          notes: "Lead created",
-          updatedBy: currentUser._id,
+          stage:       status,
+          notes:       data.visitNotes?.trim() || data.remarks?.trim() || "Lead created",
+          updatedBy:   currentUser._id,
           updatedRole: currentUser.role,
-          updatedAt: new Date(),
+          updatedAt:   new Date(),
         },
       ],
     };
 
-    /* =================================
-       🔹 AUTO ASSIGN IF CREATOR = TEAM
-    ================================= */
-
     if (currentUser.role === "TEAM") {
-      leadData.assignedUser = currentUser._id;
-      leadData.assignedManager = currentUser.supervisor; // ASM
+      leadData.assignedUser    = currentUser._id;
+      leadData.assignedManager = currentUser.supervisor;
     }
-
-    /* =================================
-       STAGE DATA
-    ================================= */
 
     if (status) {
       const stageData = validateStageData(status, data);
       Object.assign(leadData, stageData);
     }
 
+    // ── Set AFTER Object.assign so it never gets overwritten ──
+    leadData.visitNotes    = data.visitNotes?.trim()    || data.remarks?.trim()      || null;
+    leadData.visitLocation = data.visitLocation?.trim() || data.locationName?.trim() || null;
+    leadData.visitStatus   = data.visitStatus           || "Completed";
+
     const lead = new Lead(leadData);
     await lead.save();
 
     return await Lead.findById(lead._id)
       .populate("assignedManager", "firstName lastName email role")
-      .populate("assignedUser", "firstName lastName email role")
-      .populate("createdBy", "firstName lastName email role");
+      .populate("assignedUser",    "firstName lastName email role")
+      .populate("createdBy",       "firstName lastName email role");
 
   } catch (err) {
     handleError(err, "Failed to create lead");
@@ -1762,7 +1804,8 @@ const getRoleBasedLeadFilter = async (currentUser, baseFilter = {}) => {
 };
 
 export const getVisitSummaryService = async (query = {}, userId) => {
-  const { page = 1, limit = 10 } = query;
+  const { page = 1, limit = 100 } = query;
+
   const skip = (page - 1) * limit;
 
   const currentUser = await User.findById(userId);
@@ -1772,11 +1815,19 @@ export const getVisitSummaryService = async (query = {}, userId) => {
     status: "Visit",
   });
 
-  const visits = await Lead.find(filter)
-    .sort({ visitDate: -1 })
-    .skip(skip)
-    .limit(limit)
-    .lean();
+const visits = await Lead.find(filter)
+  .select(
+    'firstName lastName phone email status visitStatus ' +
+    'visitDate visitTime visitLocation visitNotes ' +  // ← visitNotes added
+    'createdAt updatedAt assignedUser assignedManager'
+  )
+  .populate('assignedUser', 'firstName lastName')
+  .populate('assignedManager', 'firstName lastName')
+  .sort({ createdAt: -1 })
+  .skip(skip)
+  .limit(limit)
+  .lean();
+
 
   return {
     visits,
