@@ -18,7 +18,7 @@ export const authenticate = async (req, res, next) => {
 
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded._id);
+    const user = await User.findById(decoded._id).select('+supervisor');
 
     if (!user) {
       return next(new AuthorizationError("User associated with token not found", 401));

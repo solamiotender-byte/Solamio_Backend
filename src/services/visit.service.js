@@ -64,24 +64,32 @@ const processPhotos = (files = []) => {
 const createLeadFromVisit = async (visit, data, session) => {
   try {
     const leadData = {
-      name: data.contactPerson || data.locationName || "Customer",
-      email: data.email || "",
-      phone: data.phone || "",
-      address: data.address || visit.address || "",
-      source: "Visit",
-      status: "New",
-      assignedTo: visit.user,
-      visit: visit._id,
-      coordinates: visit.coordinates,
-      notes: data.remarks || `Lead created from visit at ${data.locationName}`,
-      createdBy: visit.user
+      firstName:     data.contactPerson?.trim().split(' ')[0] || 'Unknown',
+      lastName:      data.contactPerson?.trim().split(' ').slice(1).join(' ') || '.',
+      email:         data.email        || null,
+      phone:         data.phone        || null,
+      address:       data.address      || visit.address || "",
+      source:        "Visit",
+      status:        "Visit",           // ✅ Fixed: always 'Visit'
+      assignedUser:  currentUser._id,   // ✅ Fixed: correct field name
+      assignedManager: currentUser.supervisor || null, // ✅ sets manager too
+      visit:         visit._id,
+      visitLocation: data.locationName  || "",
+      visitNotes:    data.remarks       || "",
+      visitStatus:   "Completed",
+      createdBy:     currentUser._id,
+      stageTimeline: [{
+        stage:       "Visit",
+        notes:       data.remarks || "Lead created from visit",
+        updatedBy:   currentUser._id,
+        updatedRole: currentUser.role,
+        updatedAt:   new Date(),
+    }],
     };
 
     const [lead] = await Lead.create([leadData], { session });
-
     visit.leadCreated = lead._id;
     await visit.save({ session });
-
     return lead;
   } catch (error) {
     console.error("Lead creation error:", error);
@@ -205,22 +213,22 @@ export const createVisitService = async (data, currentUser, files = []) => {
     };
 
     // Add contact fields only for 'yes'
-    if (isLeadCreate) {
-      if (!data.contactPerson && !data.phone && !data.email) {
-        throw new AppError(
-          "At least one contact information (name, phone, or email) is required for lead creation",
-          400
-        );
-      }
+    // For 'yes' — validate at least one contact field exists
+if (isLeadCreate) {
+  if (!data.contactPerson && !data.phone && !data.email) {
+    throw new AppError(
+      "At least one contact information (name, phone, or email) is required for lead creation",
+      400
+    );
+  }
+}
 
-      visitData.contactPerson = data.contactPerson || "";
-      visitData.phone         = data.phone         || "";
-      visitData.email         = data.email         || "";
-
-      if (!visitData.address && data.address) {
-        visitData.address = data.address;
-      }
-    }
+// ✅ Always save contact fields for ALL options (yes / no / other)
+// So Customer name always shows in Visit Records
+if (data.contactPerson) visitData.contactPerson = data.contactPerson;
+if (data.phone)         visitData.phone         = data.phone;
+if (data.email)         visitData.email         = data.email;
+if (data.address)       visitData.address       = data.address;
 
     // Create the visit
     const [visit] = await Visit.create([visitData], { session });
@@ -229,7 +237,8 @@ export const createVisitService = async (data, currentUser, files = []) => {
     let createdLead = null;
     if (isLeadCreate) {
       try {
-        createdLead = await createLeadFromVisit(visit, data, session);
+      createdLead = await createLeadFromVisit(visit, data, currentUser, session);
+      
       } catch (leadError) {
         console.error("Failed to create lead:", leadError);
         visit.remarks = (visit.remarks || "") + " [Lead creation failed: " + leadError.message + "]";

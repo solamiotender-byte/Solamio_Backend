@@ -209,10 +209,24 @@ export const createLeadService = async (data, currentUser) => {
           if (data.visitLocation?.trim()) {
             phoneExists.visitLocation = data.visitLocation.trim();
           }
-          if (data.visitStatus) {
-            phoneExists.visitStatus   = data.visitStatus;
-          }
-          phoneExists.lastContactedAt = new Date();
+
+
+         if (data.visitStatus) {
+  phoneExists.visitStatus = data.visitStatus;
+}
+// ✅ ADD THIS
+if (data.status) {
+  phoneExists.status = data.status;
+}
+// ✅ assignedUser fix
+if (!phoneExists.assignedUser && currentUser.role === "TEAM") {
+  phoneExists.assignedUser    = currentUser._id;
+  phoneExists.assignedManager = currentUser.supervisor;
+}
+phoneExists.lastContactedAt = new Date();
+
+
+
           phoneExists.stageTimeline.push({
             stage:       phoneExists.status,
             notes:       data.visitNotes?.trim() || data.remarks?.trim() || "Visit updated",
@@ -245,9 +259,23 @@ export const createLeadService = async (data, currentUser) => {
             emailExists.visitLocation = data.visitLocation.trim();
           }
           if (data.visitStatus) {
-            emailExists.visitStatus   = data.visitStatus;
-          }
-          emailExists.lastContactedAt = new Date();
+  emailExists.visitStatus = data.visitStatus;
+}
+if (data.visitStatus) {
+  emailExists.visitStatus = data.visitStatus;
+}
+// ✅ status fix
+if (data.status) {
+  emailExists.status = data.status;
+}
+// ✅ assignedUser fix — set to current TEAM user if not already assigned
+if (!emailExists.assignedUser && currentUser.role === "TEAM") {
+  emailExists.assignedUser    = currentUser._id;
+  emailExists.assignedManager = currentUser.supervisor;
+}
+emailExists.lastContactedAt = new Date();
+
+
           emailExists.stageTimeline.push({
             stage:       emailExists.status,
             notes:       data.visitNotes?.trim() || data.remarks?.trim() || "Visit updated",
@@ -286,11 +314,22 @@ export const createLeadService = async (data, currentUser) => {
       ],
     };
 
-    if (currentUser.role === "TEAM") {
-      leadData.assignedUser    = currentUser._id;
-      leadData.assignedManager = currentUser.supervisor;
-    }
+   if (currentUser.role === "TEAM") {
+  leadData.assignedUser    = currentUser._id;
+  leadData.assignedManager = currentUser.supervisor || null;
+}
+if (data.assignedUser) {
+  leadData.assignedUser = data.assignedUser;
+}
 
+if (data.assignedManager) {
+  leadData.assignedManager = data.assignedManager;
+}
+
+// optional: if frontend sends assignedTo instead of assignedUser
+if (data.assignedTo && !leadData.assignedUser) {
+  leadData.assignedUser = data.assignedTo;
+}
     if (status) {
       const stageData = validateStageData(status, data);
       Object.assign(leadData, stageData);
@@ -1793,12 +1832,15 @@ const getRoleBasedLeadFilter = async (currentUser, baseFilter = {}) => {
   }
 
   // TEAM → only own
-  if (currentUser.role === "TEAM") {
-    return {
-      ...baseFilter,
-      assignedUser: currentUser._id,
-    };
-  }
+ if (currentUser.role === "TEAM") {
+  return {
+    ...baseFilter,
+    $or: [
+      { assignedUser: currentUser._id },
+      { createdBy: currentUser._id },   // ✅ also show leads created by this user
+    ],
+  };
+}
 
   throw new Error("Unauthorized role");
 };
