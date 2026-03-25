@@ -61,7 +61,7 @@ const processPhotos = (files = []) => {
 };
 
 // Helper to create lead from visit data
-const createLeadFromVisit = async (visit, data, session) => {
+const createLeadFromVisit = async (visit, data,currentUser, session) => {
   try {
     const leadData = {
       firstName:     data.contactPerson?.trim().split(' ')[0] || 'Unknown',
@@ -389,14 +389,22 @@ export const getAllVisitsService = async (query, currentUser) => {
     const teamMemberIds = teamMembers.map(m => m._id);
     filter.user = { $in: [...teamMemberIds, currentUser._id] };
   } else if (['Head_office', 'ZSM'].includes(currentUser.role)) {
-    if (userId) filter.user = userId;
+    if (userId) filter.user = new mongoose.Types.ObjectId(userId); 
   }
 
-  if (startDate || endDate) {
-    filter.createdAt = {};
-    if (startDate) filter.createdAt.$gte = new Date(startDate);
-    if (endDate)   filter.createdAt.$lte = new Date(endDate);
+ if (startDate || endDate) {
+  filter.createdAt = {};
+  if (startDate) {
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    filter.createdAt.$gte = start;
   }
+  if (endDate) {
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999); // ← end of day, not UTC midnight
+    filter.createdAt.$lte = end;
+  }
+}
 
   if (status) filter.status = status;
 
