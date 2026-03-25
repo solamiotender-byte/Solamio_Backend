@@ -380,14 +380,65 @@ export const getAllVisitsService = async (query, currentUser) => {
 
   if (currentUser.role === 'TEAM') {
     filter.user = currentUser._id;
-  } else if (currentUser.role === 'ASM') {
-    const teamMembers = await User.find({
-      supervisor: currentUser._id,
-      role: 'TEAM'
-    }).select('_id').lean();
 
-    const teamMemberIds = teamMembers.map(m => m._id);
-    filter.user = { $in: [...teamMemberIds, currentUser._id] };
+  } 
+   else if (currentUser.role === 'ASM') {
+    // ASM sees attendance of users they created OR supervise
+    const subordinates = await User.find({
+        $or: [
+            { createdBy: currentUser._id },
+            { supervisor: currentUser._id }
+        ]
+    }).select('_id');
+
+    const subordinateIds = subordinates.map(u => u._id);
+
+    // Also include ASM's own attendance
+    filter.user = { $in: [...subordinateIds, currentUser._id] };
+
+    // If a specific userId is requested, verify it's within their scope
+    if (userId) {
+        const isAllowed = subordinateIds.some(id => id.toString() === userId);
+        if (!isAllowed && userId !== currentUser._id.toString()) {
+            throw new AppError("Unauthorized to view this user's attendance", 403);
+        }
+        filter.user = userId;
+    }
+
+} else if (currentUser.role === 'ZSM') {
+    // ZSM sees attendance of users under ASMs they supervise + direct subordinates
+    const asmList = await User.find({
+        $or: [
+            { createdBy: currentUser._id },
+            { supervisor: currentUser._id }
+        ]
+    }).select('_id');
+
+    const asmIds = asmList.map(u => u._id);
+
+    // Get all TEAM users under those ASMs
+    const teamUsers = await User.find({
+        $or: [
+            { createdBy: { $in: asmIds } },
+            { supervisor: { $in: asmIds } },
+            { createdBy: currentUser._id },
+            { supervisor: currentUser._id }
+        ]
+    }).select('_id');
+
+    const allIds = teamUsers.map(u => u._id);
+    filter.user = { $in: [...allIds, currentUser._id] };
+
+    if (userId) {
+        const isAllowed = allIds.some(id => id.toString() === userId);
+        if (!isAllowed && userId !== currentUser._id.toString()) {
+            throw new AppError("Unauthorized to view this user's attendance", 403);
+        }
+        filter.user = userId;
+    }
+
+
+
   } else if (['Head_office', 'ZSM'].includes(currentUser.role)) {
     if (userId) filter.user = new mongoose.Types.ObjectId(userId); 
   }

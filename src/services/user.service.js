@@ -438,22 +438,64 @@ export const getTeamUnderAsmList = async (query, userId) => {
     } = query;
 
     const skip = (page - 1) * limit;
+
+    // ✅ Find requesting user's role
+    const requestingUser = await User.findById(userId).select("role");
+    if (!requestingUser) throw new AppError("User not found", 404);
+
+    // ✅ Build role-based filter
     let filter = { role: "TEAM" };
 
-    if (search) {
+    if (requestingUser.role === "ASM") {
+      // ASM sees only users they created OR supervise
       filter.$or = [
+        { createdBy: userId },
+        { supervisor: userId },
+      ];
+    } else if (requestingUser.role === "ZSM") {
+      // ZSM sees team under their ASMs + direct team
+      const asmList = await User.find({
+        $or: [{ createdBy: userId }, { supervisor: userId }],
+        role: "ASM",
+      }).select("_id");
+
+      const asmIds = asmList.map((a) => a._id);
+
+      filter.$or = [
+        { createdBy: userId },
+        { supervisor: userId },
+        { createdBy: { $in: asmIds } },
+        { supervisor: { $in: asmIds } },
+      ];
+    }
+    // Head_office → no extra filter, sees all TEAM users
+
+    // ✅ Search — merge safely with existing $or
+    if (search) {
+      const searchCond = [
         { firstName: new RegExp(search, "i") },
         { lastName:  new RegExp(search, "i") },
         { email:     new RegExp(search, "i") },
-        { phone:     new RegExp(search, "i") },
+        { phoneNumber: new RegExp(search, "i") },
       ];
+
+      if (filter.$or) {
+        filter = {
+          role: "TEAM",
+          $and: [
+            { $or: filter.$or },
+            { $or: searchCond },
+          ],
+        };
+      } else {
+        filter.$or = searchCond;
+      }
     }
 
     if (status) filter.status = status;
 
     const sort = { [sortBy]: sortOrder === "desc" ? -1 : 1 };
 
-    // ✅ createdAt included — only password & viewPassword excluded
     const users = await User.find(filter)
       .select("-password -viewPassword")
       .populate("supervisor", "firstName lastName role email")
@@ -518,7 +560,12 @@ export const getManagerList = async (query) => {
       .sort(sort);
 
     const total = await User.countDocuments(filter);
-
+  if (requestingUser?.role === "ZSM") {
+      filter.$or = [
+        { createdBy: currentUserId },
+        { supervisor: currentUserId }
+      ];
+    }
     return {
       users,
       pagination: {
