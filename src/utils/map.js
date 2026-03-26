@@ -569,7 +569,7 @@ export default function MemberVisitHistory({ userId: propUserId }) {
           address: att.punchIn?.address || null, time: att.punchIn?.time || null,
         });
         try {
-          const p = await apiFetch("/location/today-path",
+          const p = await apiFetch("/location/today",
             targetUserId ? { salesmanId: targetUserId } : {});
           const pts = p?.result || p?.data || [];
           if (pts.length) setTrackPoints(pts.map(pt => ({ lat: pt.lat, lng: pt.lng, time: pt.recordedAt })));

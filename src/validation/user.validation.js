@@ -42,13 +42,12 @@ export const createUserValidation = [
     .withMessage("Phone number must be exactly 10 digits")
     .trim(),
 
+  // ✅ FIXED: was ["HEAD_OFFICE", "ZSM", "ASM", "TEAM", "COMMERCIAL_HEAD"]
   body("role")
     .notEmpty()
     .withMessage("Role is required")
-    .isIn(["HEAD_OFFICE", "ZSM", "ASM", "TEAM", "COMMERCIAL_HEAD"])
-    .withMessage(
-      "Invalid role. Valid roles: Head_office, ZSM, ASM, TEAM, Sales Executive, Support"
-    ),
+    .isIn(["Head_office", "ZSM", "ASM", "TEAM"])
+    .withMessage("Invalid role. Valid roles: Head_office, ZSM, ASM, TEAM"),
 
   body("supervisor")
     .optional()
@@ -92,10 +91,11 @@ export const updateUserValidation = [
     .withMessage("Phone number must be exactly 10 digits")
     .trim(),
 
+  // ✅ FIXED: was ["HEAD_OFFICE", "ZSM", "ASM", "TEAM", "COMMERCIAL_HEAD"]
   body("role")
     .optional()
-    .isIn(["HEAD_OFFICE", "ZSM", "ASM", "TEAM", "COMMERCIAL_HEAD"])
-    .withMessage("Invalid role"),
+    .isIn(["Head_office", "ZSM", "ASM", "TEAM"])
+    .withMessage("Invalid role. Valid roles: Head_office, ZSM, ASM, TEAM"),
 
   body("supervisor")
     .optional()
@@ -161,10 +161,11 @@ export const getUsersQueryValidation = [
     .isLength({ max: 100 })
     .withMessage("Search term too long"),
 
+  // ✅ FIXED: was ["HEAD_OFFICE", "ZSM", "ASM", "TEAM", "COMMERCIAL_HEAD"]
   query("role")
     .optional()
-    .isIn(["HEAD_OFFICE", "ZSM", "ASM", "TEAM", "COMMERCIAL_HEAD"])
-    .withMessage("Invalid role filter"),
+    .isIn(["Head_office", "ZSM", "ASM", "TEAM"])
+    .withMessage("Invalid role filter. Valid roles: Head_office, ZSM, ASM, TEAM"),
 
   query("status")
     .optional()

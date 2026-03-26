@@ -26,7 +26,10 @@ const attendanceSchema = new mongoose.Schema(
                 lng: Number
             },
             address: String,
+             isAutoPunchOut: { type: Boolean, default: false }
         },
+        remarks: String,
+        missedPunchOut: { type: Boolean, default: false },
         status: {
             type: String,
             enum: ["present", "absent", "half-day", "holiday", "leave"],

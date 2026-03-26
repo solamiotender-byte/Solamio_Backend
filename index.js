@@ -7,6 +7,7 @@ import connectDB from "./src/config/mongoDB.js";
 import { initializeSocket } from "./src/helper/socket/index.js";
 import logger from "./src/utils/logger.js";
 import { setupGracefulShutdown } from "./src/utils/shutdownHandler.js";
+import { startAttendanceCron } from "./src/crons/attendance.cron.js";
 
 dotenv.config();
 
@@ -23,6 +24,7 @@ app.set("io", io);
 const startServer = async () => {
   try {
     await connectDB();
+startAttendanceCron();
 
     server.listen(PORT, () => {
       //console.log(`🚀 Server running on port ${PORT}`);
