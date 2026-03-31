@@ -1,4 +1,3 @@
-
 class AppError extends Error {
     constructor(message, statusCode, metadata = {}) {
         super(message);
@@ -10,9 +9,9 @@ class AppError extends Error {
 }
 
 class ValidationError extends AppError {
-    constructor(errors, message = 'Validation failed') {
-        super(message, 400);
-        this.metadata = { validationErrors: errors };
+    constructor(message, statusCode = 400) {
+        super(message, statusCode);
+        this.name = "ValidationError";
     }
 }
 
