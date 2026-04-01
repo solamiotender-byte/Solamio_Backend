@@ -150,22 +150,45 @@ export const createVisitService = async (data, currentUser, files = []) => {
     let travelTimeMinutes = 0;
 
     if (previousVisit && previousVisit.coordinates) {
-      previousVisitId = previousVisit._id;
+  previousVisitId = previousVisit._id;
 
+  // Try Google Directions API for real road distance
+  try {
+    const gKey   = process.env.GOOGLE_MAPS_API_KEY;
+    const dirUrl = `https://maps.googleapis.com/maps/api/directions/json` +
+      `?origin=${previousVisit.coordinates.lat},${previousVisit.coordinates.lng}` +
+      `&destination=${lat},${lng}` +
+      `&mode=driving&key=${gKey}`;
+
+    const dirRes  = await fetch(dirUrl);
+    const dirData = await dirRes.json();
+
+    if (dirData.status === 'OK') {
+      const leg              = dirData.routes[0].legs[0];
+      distanceFromPreviousKm = leg.distance.value / 1000;
+      travelTimeMinutes      = Math.round(leg.duration.value / 60);
+
+      console.log(`[Distance] Road: ${leg.distance.text}, Drive: ${leg.duration.text}`);
+    } else {
+      // Fallback to straight-line if Google fails
+      console.warn(`[Distance] Directions API status: ${dirData.status} — falling back to haversine`);
       distanceFromPreviousKm = calculateDistanceKm(
-        previousVisit.coordinates.lat,
-        previousVisit.coordinates.lng,
-        lat,
-        lng
+        previousVisit.coordinates.lat, previousVisit.coordinates.lng, lat, lng
       );
-
-      totalDistanceTillNowKm =
-        (previousVisit.totalDistanceTillNowKm || 0) + distanceFromPreviousKm;
-
-      if (distanceFromPreviousKm > 0) {
-        travelTimeMinutes = Math.round((distanceFromPreviousKm / 40) * 60);
-      }
+      travelTimeMinutes = Math.round((distanceFromPreviousKm / 40) * 60);
     }
+  } catch (dirErr) {
+    // Network error — fall back gracefully
+    console.warn('[Distance] Directions API failed, using haversine:', dirErr.message);
+    distanceFromPreviousKm = calculateDistanceKm(
+      previousVisit.coordinates.lat, previousVisit.coordinates.lng, lat, lng
+    );
+    travelTimeMinutes = Math.round((distanceFromPreviousKm / 40) * 60);
+  }
+
+  totalDistanceTillNowKm =
+    (previousVisit.totalDistanceTillNowKm || 0) + distanceFromPreviousKm;
+}
 
     // ── Resolve the isLeadCreated value ──────────────────────────────────
     // Frontend sends: isLeadCreated = 'yes' | 'no' | 'other'
