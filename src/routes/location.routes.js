@@ -16,7 +16,7 @@ const router = express.Router();
 router.use(authenticate);
 
 // ─── Save points ──────────────────────────────────────────────────────────────
-router.post("/track",      createLocationPointController);
+// router.post("/track",      createLocationPointController);
 router.post("/track/bulk", bulkCreateLocationPointsController);
 
 // ─── Read trail & stats ───────────────────────────────────────────────────────

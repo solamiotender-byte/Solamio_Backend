@@ -63,15 +63,43 @@ export const registerLocationEvents = (socket) => {
       const userId  = socket.user.id;
 
       // ── Persist to DB ──────────────────────────────────────────────────────
-      await LocationPoint.create({
-        salesmanId: userId,
-        date:       today,
-        lat,
-        lng,
-        speed:      data.speed    ?? 0,
-        accuracy:   data.accuracy ?? 0,
-        recordedAt: data.time ? new Date(data.time) : now,
-      });
+      const lastPoint = await LocationPoint.findOne(
+  { salesmanId: userId, date: today },
+  {},
+  { sort: { recordedAt: -1 } }
+);
+
+let distanceFromPrevious = 0;
+
+if (lastPoint) {
+  const dist = calculateDistanceKm(
+    lastPoint.lat,
+    lastPoint.lng,
+    lat,
+    lng
+  );
+
+  // ❗ filter bad data
+  if (dist > 5) {
+    distanceFromPrevious = 0; // ignore jump
+  } else if (dist < 0.005) {
+    distanceFromPrevious = 0; // ignore very small movement (~5m)
+  } else {
+    distanceFromPrevious = dist;
+  }
+}
+
+// 2. Save with distance
+await LocationPoint.create({
+  salesmanId: userId,
+  date: today,
+  lat,
+  lng,
+  speed: data.speed ?? 0,
+  accuracy: data.accuracy ?? 0,
+  recordedAt: data.time ? new Date(data.time) : now,
+  distanceFromPrevious, // ✅ IMPORTANT
+});
 
       // ── Update in-memory latest position ───────────────────────────────────
       const prev = activeSalesmen.get(userId);
