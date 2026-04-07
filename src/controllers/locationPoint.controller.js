@@ -16,9 +16,9 @@ export const createLocationPointController = async (req, res, next) => {
     if (lat == null || lng == null)
       return res.status(400).json({ success: false, message: "lat and lng are required" });
 
-    // const data = await createLocationPointService(req.body, req.user);
+    // const data = await createLocationPointService(req.body, req.user);  ← COMMENTED OUT
     sendResponse(res, 200, "Tracking is handled via socket, not API", null);
-    sendResponse(res, 201, "Location point recorded successfully", data);
+    sendResponse(res, 201, "Location point recorded successfully", data);  
   } catch (e) { next(e); }
 };
 
