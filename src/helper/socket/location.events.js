@@ -1,32 +1,30 @@
 // socket/location.events.js
-import { getIO }         from "./index.js";
-import LocationPoint     from "../../models/locationPoint.js";
-import { calculateDistanceKm } from "../../utils/locationUtils.js";
+import { getIO }                    from "./index.js";
+import LocationPoint                from "../../models/locationPoint.js";
+import { calculateDistanceKm }      from "../../utils/locationUtils.js";
 
-// ─── In-memory store ──────────────────────────────────────────────────────────
-// Tracks the latest known position of every active salesman.
-// Shape: { [userId]: { lat, lng, speed, accuracy, recordedAt, socketId } }
+// ── In-memory store ───────────────────────────────────────────────────────────
+// { [userId]: { lat, lng, speed, accuracy, recordedAt, socketId, isPunchedIn } }
 const activeSalesmen = new Map();
 
-// ─── Register all location events on a socket ─────────────────────────────────
+// ── Register all location events on a socket ──────────────────────────────────
 export const registerLocationEvents = (socket) => {
   const io = getIO();
 
-  // ── 1. Salesman starts tracking (punch in) ──────────────────────────────────
+  // ── 1. Salesman punches in ──────────────────────────────────────────────────
   socket.on("location:start", (data) => {
     if (socket.user.role !== "TEAM") return;
 
     activeSalesmen.set(socket.user.id, {
-      lat:        data.lat,
-      lng:        data.lng,
-      speed:      data.speed      ?? 0,
-      accuracy:   data.accuracy   ?? 0,
-      recordedAt: new Date().toISOString(),
-      socketId:   socket.id,
+      lat:         data.lat,
+      lng:         data.lng,
+      speed:       data.speed    ?? 0,
+      accuracy:    data.accuracy ?? 0,
+      recordedAt:  new Date().toISOString(),
+      socketId:    socket.id,
       isPunchedIn: true,
     });
 
-    // Tell all admins/supervisors this user just went live
     io.to("role-Head_office").emit("location:user_online", {
       userId:    socket.user.id,
       lat:       data.lat,
@@ -42,15 +40,14 @@ export const registerLocationEvents = (socket) => {
         timestamp: new Date().toISOString(),
       });
     }
-
-    //console.log(`[location:start] User ${socket.user.id} started tracking`);
   });
 
-  // ── 2. Live GPS update (fires every N seconds from device) ──────────────────
+  // ── 2. Live GPS update ──────────────────────────────────────────────────────
   socket.on("location:update", async (data) => {
     try {
-      // Basic validation — reject garbage coordinates
       const { lat, lng } = data;
+
+      // Validate coordinates
       if (lat == null || lng == null || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
         socket.emit("location:error", { message: "Invalid coordinates" });
         return;
@@ -58,50 +55,59 @@ export const registerLocationEvents = (socket) => {
 
       if (socket.user.role !== "TEAM") return;
 
-      const now     = new Date();
-      const today   = now.toISOString().split("T")[0];
-      const userId  = socket.user.id;
+      const now    = new Date();
+      const today  = now.toISOString().split("T")[0];
+      const userId = socket.user.id;
 
-      // ── Persist to DB ──────────────────────────────────────────────────────
+      // ── Server-side throttle: reject if last point < 25s ago ───────────────
+      // This protects the DB even if the client sends faster than expected.
       const lastPoint = await LocationPoint.findOne(
-  { salesmanId: userId, date: today },
-  {},
-  { sort: { recordedAt: -1 } }
-);
+        { salesmanId: userId, date: today },
+        { recordedAt: 1, lat: 1, lng: 1 },
+        { sort: { recordedAt: -1 } }
+      );
 
-let distanceFromPrevious = 0;
+      if (lastPoint) {
+        const secondsSinceLast = (now - lastPoint.recordedAt) / 1000;
+        if (secondsSinceLast < 25) {
+          // Too soon — ack without saving so client knows we got it
+          socket.emit("location:ack", {
+            saved:     false,
+            skipped:   true,
+            reason:    `too_soon (${secondsSinceLast.toFixed(0)}s since last)`,
+            timestamp: now.toISOString(),
+          });
+          return;
+        }
+      }
 
-if (lastPoint) {
-  const dist = calculateDistanceKm(
-    lastPoint.lat,
-    lastPoint.lng,
-    lat,
-    lng
-  );
+      // ── Calculate distance from previous point ──────────────────────────────
+      let distanceFromPrevious = 0;
+      if (lastPoint) {
+        const dist = calculateDistanceKm(lastPoint.lat, lastPoint.lng, lat, lng);
+        if (dist > 5) {
+          distanceFromPrevious = 0; // impossible jump — ignore
+        } else if (dist < 0.005) {
+          distanceFromPrevious = 0; // < 5m movement — ignore
+        } else {
+          distanceFromPrevious = dist;
+        }
+      }
 
-  // ❗ filter bad data
-  if (dist > 5) {
-    distanceFromPrevious = 0; // ignore jump
-  } else if (dist < 0.005) {
-    distanceFromPrevious = 0; // ignore very small movement (~5m)
-  } else {
-    distanceFromPrevious = dist;
-  }
-}
+      // ── Save to DB ──────────────────────────────────────────────────────────
+      await LocationPoint.create({
+        salesmanId:          userId,
+        date:                today,
+        lat,
+        lng,
+        speed:               data.speed    ?? 0,
+        accuracy:            data.accuracy ?? 0,
+        recordedAt:          data.time ? new Date(data.time) : now,
+        distanceFromPrevious,
+        expiresAt:           new Date(now.getTime() + 24 * 60 * 60 * 1000),
+      });
 
-// 2. Save with distance
-await LocationPoint.create({
-  salesmanId: userId,
-  date: today,
-  lat,
-  lng,
-  speed: data.speed ?? 0,
-  accuracy: data.accuracy ?? 0,
-  recordedAt: data.time ? new Date(data.time) : now,
-  distanceFromPrevious, // ✅ IMPORTANT
-});
-
-      // ── Update in-memory latest position ───────────────────────────────────
+      // ── Update in-memory position ───────────────────────────────────────────
       const prev = activeSalesmen.get(userId);
       let distanceSinceLast = 0;
       if (prev) {
@@ -118,7 +124,7 @@ await LocationPoint.create({
         isPunchedIn: true,
       });
 
-      // ── Broadcast live position to admins ──────────────────────────────────
+      // ── Broadcast live position to admins ───────────────────────────────────
       const payload = {
         userId,
         lat,
@@ -129,20 +135,20 @@ await LocationPoint.create({
         timestamp:        now.toISOString(),
       };
 
-      // Head office sees everyone
       io.to("role-Head_office").emit("location:live_update", payload);
+      io.to("role-ZSM").emit("location:live_update", payload);
+      io.to("role-ASM").emit("location:live_update", payload);
 
-      // Supervisor sees their own team member
       if (socket.user.supervisor) {
         io.to(`supervisor-${socket.user.supervisor}`).emit("location:live_update", payload);
       }
 
-      // ZSM and ASM roles also get updates
-      io.to("role-ZSM").emit("location:live_update", payload);
-      io.to("role-ASM").emit("location:live_update", payload);
-
-      // Acknowledge back to the device so it knows the point was saved
-      socket.emit("location:ack", { saved: true, timestamp: now.toISOString() });
+      // Ack back to device
+      socket.emit("location:ack", {
+        saved:     true,
+        skipped:   false,
+        timestamp: now.toISOString(),
+      });
 
     } catch (error) {
       console.error(`[location:update] Error for user ${socket.user.id}:`, error.message);
@@ -150,7 +156,7 @@ await LocationPoint.create({
     }
   });
 
-  // ── 3. Bulk sync (offline points queued on device) ──────────────────────────
+  // ── 3. Bulk sync (offline points) ──────────────────────────────────────────
   socket.on("location:bulk_sync", async (data) => {
     try {
       const { points } = data;
@@ -163,22 +169,50 @@ await LocationPoint.create({
       const today  = new Date().toISOString().split("T")[0];
       const userId = socket.user.id;
 
-      const docs = points
+      // Sort ascending so distance chain is correct
+      const sorted = [...points]
         .filter((p) => p.lat != null && p.lng != null)
-        .map((p) => ({
-          salesmanId: userId,
-          date:       p.time ? new Date(p.time).toISOString().split("T")[0] : today,
-          lat:        p.lat,
-          lng:        p.lng,
-          speed:      p.speed    ?? 0,
-          accuracy:   p.accuracy ?? 0,
-          recordedAt: p.time ? new Date(p.time) : new Date(),
-        }));
+        .sort((a, b) => (a.time ? new Date(a.time) : 0) - (b.time ? new Date(b.time) : 0));
 
-      if (docs.length === 0) {
+      if (sorted.length === 0) {
         socket.emit("location:error", { message: "No valid points to sync" });
         return;
       }
+
+      // Chain distance from last saved point
+      const lastSaved = await LocationPoint.findOne(
+        { salesmanId: userId },
+        { lat: 1, lng: 1 },
+        { sort: { recordedAt: -1 } }
+      );
+
+      let prevLat = lastSaved?.lat ?? null;
+      let prevLng = lastSaved?.lng ?? null;
+
+      const docs = sorted.map((p) => {
+        const recordedAt = p.time ? new Date(p.time) : new Date();
+
+        let distanceFromPrevious = 0;
+        if (prevLat !== null) {
+          const dist = calculateDistanceKm(prevLat, prevLng, p.lat, p.lng);
+          distanceFromPrevious = dist > 5 || dist < 0.005 ? 0 : dist;
+        }
+
+        prevLat = p.lat;
+        prevLng = p.lng;
+
+        return {
+          salesmanId:          userId,
+          date:                recordedAt.toISOString().split("T")[0],
+          lat:                 p.lat,
+          lng:                 p.lng,
+          speed:               p.speed    ?? 0,
+          accuracy:            p.accuracy ?? 0,
+          recordedAt,
+          distanceFromPrevious,
+          expiresAt:           new Date(recordedAt.getTime() + 24 * 60 * 60 * 1000),
+        };
+      });
 
       await LocationPoint.insertMany(docs, { ordered: false });
 
@@ -187,15 +221,13 @@ await LocationPoint.create({
         timestamp: new Date().toISOString(),
       });
 
-      //console.log(`[location:bulk_sync] Saved ${docs.length} points for user ${userId}`);
-
     } catch (error) {
       console.error(`[location:bulk_sync] Error for user ${socket.user.id}:`, error.message);
       socket.emit("location:error", { message: "Bulk sync failed" });
     }
   });
 
-  // ── 4. Admin requests live snapshot of all active salesmen ──────────────────
+  // ── 4. Admin requests snapshot of all active salesmen ──────────────────────
   socket.on("location:get_active_users", () => {
     if (!["Head_office", "ZSM", "ASM"].includes(socket.user.role)) {
       socket.emit("location:error", { message: "Not authorized" });
@@ -219,21 +251,18 @@ await LocationPoint.create({
 
     const { userId } = data;
     socket.join(`watching-${userId}`);
-    //console.log(`[location:watch_user] Admin ${socket.user.id} watching user ${userId}`);
 
-    // Send the latest known position immediately
     const latest = activeSalesmen.get(userId);
     if (latest) {
       socket.emit("location:live_update", { userId, ...latest });
     }
   });
 
-  // ── 6. Salesman stops tracking (punch out) ──────────────────────────────────
+  // ── 6. Salesman punches out ─────────────────────────────────────────────────
   socket.on("location:stop", () => {
     const userId = socket.user.id;
     activeSalesmen.delete(userId);
 
-    // Tell admins this user went offline
     io.to("role-Head_office").emit("location:user_offline", {
       userId,
       timestamp: new Date().toISOString(),
@@ -245,16 +274,13 @@ await LocationPoint.create({
         timestamp: new Date().toISOString(),
       });
     }
-
-    //console.log(`[location:stop] User ${userId} stopped tracking`);
   });
 
-  // ── 7. Clean up on disconnect ────────────────────────────────────────────────
+  // ── 7. Clean up on disconnect ───────────────────────────────────────────────
   socket.on("disconnect", () => {
     const userId = socket.user.id;
+    const entry  = activeSalesmen.get(userId);
 
-    // Only remove if this socket is still the active one
-    const entry = activeSalesmen.get(userId);
     if (entry?.socketId === socket.id) {
       activeSalesmen.delete(userId);
 
@@ -273,18 +299,17 @@ await LocationPoint.create({
   });
 };
 
-// ─── Helper: broadcast a location update from REST controller ─────────────────
-// Call this from your HTTP /track controller if you want REST + socket together
+// ── Helper: broadcast from REST controller ────────────────────────────────────
 export const broadcastLocationUpdate = (userId, supervisorId, payload) => {
   try {
     const io = getIO();
     io.to("role-Head_office").emit("location:live_update", { userId, ...payload });
-    io.to("role-ZSM").emit("location:live_update", { userId, ...payload });
-    io.to("role-ASM").emit("location:live_update", { userId, ...payload });
+    io.to("role-ZSM").emit("location:live_update",         { userId, ...payload });
+    io.to("role-ASM").emit("location:live_update",         { userId, ...payload });
     if (supervisorId) {
       io.to(`supervisor-${supervisorId}`).emit("location:live_update", { userId, ...payload });
     }
   } catch {
-    // Socket not initialized yet — safe to ignore during startup
+    // Socket not initialized yet — safe to ignore
   }
 };
