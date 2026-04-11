@@ -8,7 +8,7 @@ let io = null;
 export const initializeSocket = (server) => {
   io = new Server(server, {
     cors: {
-      origin:         process.env.CLIENT_URL || "https://solar-frontend-lake.vercel.app",
+      origin:         process.env.CLIENT_URL ||"https://vanurtech-solar-frontend.vercel.app",
       methods:        ["GET", "POST", "PUT", "DELETE"],
       credentials:    true,
       allowedHeaders: ["Authorization", "Content-Type"],

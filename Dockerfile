@@ -23,4 +23,4 @@ EXPOSE 8080
 ENTRYPOINT ["/sbin/tini", "--"]
 
 # Start the app
-CMD ["node", "app.js"]
+CMD ["node", "index.js"]
