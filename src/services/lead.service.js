@@ -18,6 +18,7 @@ import { isValidEmail } from "../utils/emailValidation.js";
 import { generateFullUrl } from '../utils/generateFullUrl.js'
 import s3Client from "../config/aws.js";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
+import { getHeadOfficeScopedUserIds } from "../utils/headOfficeScope.js";
 
 
 /* -------------------------------------------------- */
@@ -42,11 +43,19 @@ export const getLeadVisibilityFilter = async (currentUser) => {
     throw new AppError("Invalid user role", 403);
   }
 
+  const scopedUserIds = await getHeadOfficeScopedUserIds(currentUser);
+
   /* ==========================
      HEAD OFFICE → ALL LEADS
   ========================== */
   if (currentUser.role === "Head_office") {
-    return {}; // no restriction
+    return {
+      $or: [
+        { assignedManager: { $in: scopedUserIds } },
+        { assignedUser: { $in: scopedUserIds } },
+        { createdBy: { $in: scopedUserIds } },
+      ],
+    };
   }
 
   /* ==========================
@@ -1374,9 +1383,15 @@ export const getHeadOfficeDashboardService = async (userId) => {
       throw new AppError("Access denied. Head Office and ZSM only.", 403);
     }
 
-    // SUMMARY STATS QUERY (ADDED)
+    const visibilityFilter = await getLeadVisibilityFilter(currentUser);
+    const leadBaseFilter = { ...visibilityFilter, isDeleted: false };
+    const scopedUserIds = await getHeadOfficeScopedUserIds(currentUser, {
+      roles: ["ZSM", "ASM", "TEAM"],
+      includeInactive: false,
+    });
+
     const summaryStatsPromise = Lead.aggregate([
-      { $match: { isDeleted: false } },
+      { $match: leadBaseFilter },
       { $group: { _id: null, totalLeads: { $sum: 1 } } },
     ]);
 
@@ -1395,18 +1410,18 @@ export const getHeadOfficeDashboardService = async (userId) => {
       recentActivities,
       summaryStats,
     ] = await Promise.all([
-      Lead.countDocuments({ status: "Visit", isDeleted: false }),
-      Lead.countDocuments({ status: "Missed Leads", isDeleted: false }),
-      Lead.countDocuments({ status: "Registration", isDeleted: false }),
-      Lead.countDocuments({ status: "Bank Loan Apply", isDeleted: false }),
-      Lead.countDocuments({ status: "Document Submission", isDeleted: false }),
-      Lead.countDocuments({ status: "Disbursement", isDeleted: false }),
+      Lead.countDocuments({ ...leadBaseFilter, status: "Visit" }),
+      Lead.countDocuments({ ...leadBaseFilter, status: "Missed Leads" }),
+      Lead.countDocuments({ ...leadBaseFilter, status: "Registration" }),
+      Lead.countDocuments({ ...leadBaseFilter, status: "Bank Loan Apply" }),
+      Lead.countDocuments({ ...leadBaseFilter, status: "Document Submission" }),
+      Lead.countDocuments({ ...leadBaseFilter, status: "Disbursement" }),
       Lead.countDocuments({
+        ...leadBaseFilter,
         status: "Installation Completion",
-        isDeleted: false,
       }),
 
-      Lead.find({ status: "Registration", isDeleted: false })
+      Lead.find({ ...leadBaseFilter, status: "Registration" })
         .sort({ dateOfRegistration: -1 })
         .limit(5)
         .select(
@@ -1414,13 +1429,13 @@ export const getHeadOfficeDashboardService = async (userId) => {
         )
         .lean(),
 
-      Lead.find({ status: "Missed Leads", isDeleted: false })
+      Lead.find({ ...leadBaseFilter, status: "Missed Leads" })
         .sort({ lastContactedAt: -1 })
         .limit(5)
         .select("firstName lastName phone email lastContactedAt notes")
         .lean(),
 
-      Lead.find({ status: "Visit", isDeleted: false })
+      Lead.find({ ...leadBaseFilter, status: "Visit" })
         .sort({ visitDate: -1 })
         .limit(5)
         .select(
@@ -1429,6 +1444,7 @@ export const getHeadOfficeDashboardService = async (userId) => {
         .lean(),
 
       User.find({
+        _id: { $in: scopedUserIds },
         role: { $in: ["ZSM", "ASM", "TEAM"] },
         status: "active",
       })
@@ -1437,7 +1453,7 @@ export const getHeadOfficeDashboardService = async (userId) => {
         .limit(10)
         .lean(),
 
-      Lead.find({ isDeleted: false })
+      Lead.find(leadBaseFilter)
         .sort({ updatedAt: -1 })
         .limit(10)
         .select("firstName lastName status updatedAt currentStage assignedUser")

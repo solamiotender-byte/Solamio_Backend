@@ -5,6 +5,10 @@ import { AppError } from "../errors/customError.js";
 import { getAddressFromCoords } from "../utils/locationUtils.js";
 import Visit from '../models/visit.model.js'
 import mongoose from "mongoose";
+import {
+  assertSameHeadOffice,
+  getHeadOfficeScopedUserIds,
+} from "../utils/headOfficeScope.js";
 
 
 
@@ -277,12 +281,21 @@ export const getAllAttendanceService = async (query, currentUser) => {
       ...filters
     } = query;
 
-    const filter = { ...filters };
+    const scopedUserIds = await getHeadOfficeScopedUserIds(currentUser);
+    const filter = {
+      ...filters,
+      user: { $in: scopedUserIds },
+    };
 
     // Role-based filtering
     if (currentUser.role === 'TEAM') {
       filter.user = currentUser._id;
     } else if (userId) {
+      const targetUser = await User.findById(userId);
+      if (!targetUser) {
+        throw new AppError("User not found", 404);
+      }
+      await assertSameHeadOffice(currentUser, targetUser);
       filter.user = userId;
     }
 
@@ -476,9 +489,12 @@ export const updateAttendanceService = async (attendanceId, data, currentUser) =
       throw new AppError("Unauthorized to update attendance records", 403);
     }
 
-    const attendance = await Attendance.findById(attendanceId);
+    const attendance = await Attendance.findById(attendanceId).populate('user', '_id');
     if (!attendance) {
       throw new AppError("Attendance record not found", 404);
+    }
+    if (attendance.user?._id) {
+      await assertSameHeadOffice(currentUser, attendance.user._id);
     }
 
     if (data.status) attendance.status = data.status;
@@ -522,10 +538,15 @@ export const deleteAttendanceService = async (attendanceId, currentUser) => {
       throw new AppError("Unauthorized to delete attendance records", 403);
     }
 
-    const attendance = await Attendance.findByIdAndDelete(attendanceId);
+    const attendance = await Attendance.findById(attendanceId).populate('user', '_id');
     if (!attendance) {
       throw new AppError("Attendance record not found", 404);
     }
+    if (attendance.user?._id) {
+      await assertSameHeadOffice(currentUser, attendance.user._id);
+    }
+
+    await attendance.deleteOne();
 
     return { message: "Attendance record deleted successfully" };
   } catch (error) {
@@ -539,9 +560,17 @@ export const getAttendanceStatsService = async (query, currentUser) => {
   try {
     const { userId, startDate, endDate, groupBy = 'day' } = query;
 
-    const matchStage = {};
+    const scopedUserIds = await getHeadOfficeScopedUserIds(currentUser);
+    const matchStage = {
+      user: { $in: scopedUserIds.map((id) => new mongoose.Types.ObjectId(id)) },
+    };
 
     if (userId && ['Head_office', 'ZSM', 'ASM'].includes(currentUser.role)) {
+      const targetUser = await User.findById(userId);
+      if (!targetUser) {
+        throw new AppError("User not found", 404);
+      }
+      await assertSameHeadOffice(currentUser, targetUser);
       matchStage.user = new mongoose.Types.ObjectId(userId);
     } else if (currentUser.role === 'TEAM') {
       matchStage.user = new mongoose.Types.ObjectId(currentUser._id);

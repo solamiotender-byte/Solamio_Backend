@@ -11,6 +11,12 @@ import {
 } from "../utils/locationUtils.js";
 import { generateFullUrl } from '../utils/generateFullUrl.js';
 import { getIO } from "../helper/socket/index.js";
+import {
+  assertSameHeadOffice,
+  getHeadOfficeIdForUser,
+  getHeadOfficeScopedUserIds,
+  getScopedManagerRoomNames,
+} from "../utils/headOfficeScope.js";
 
 /* =========================================================
    HELPERS
@@ -289,11 +295,14 @@ if (data.address)       visitData.address       = data.address;
         });
 
         if (createdLead) {
-          io.to('role:Head_office').to('role:ZSM').to('role:ASM').emit('lead:created', {
-            lead:      createdLead,
-            visit:     populatedVisit,
-            createdBy: currentUser
-          });
+          const headOfficeId = await getHeadOfficeIdForUser(currentUser);
+          for (const room of getScopedManagerRoomNames(headOfficeId)) {
+            io.to(room).emit('lead:created', {
+              lead:      createdLead,
+              visit:     populatedVisit,
+              createdBy: currentUser
+            });
+          }
         }
       }
     } catch (socketError) {
@@ -399,7 +408,8 @@ export const getAllVisitsService = async (query, currentUser) => {
 
   const skip = (parseInt(page) - 1) * parseInt(limit);
 
-  let filter = {};
+  const scopedUserIds = await getHeadOfficeScopedUserIds(currentUser);
+  let filter = { user: { $in: scopedUserIds } };
 
   if (currentUser.role === 'TEAM') {
     filter.user = currentUser._id;
@@ -463,7 +473,14 @@ export const getAllVisitsService = async (query, currentUser) => {
 
 
   } else if (['Head_office', 'ZSM'].includes(currentUser.role)) {
-    if (userId) filter.user = new mongoose.Types.ObjectId(userId); 
+    if (userId) {
+      const targetUser = await User.findById(userId);
+      if (!targetUser) {
+        throw new AppError("User not found", 404);
+      }
+      await assertSameHeadOffice(currentUser, targetUser);
+      filter.user = new mongoose.Types.ObjectId(userId);
+    }
   }
 
  if (startDate || endDate) {
@@ -571,7 +588,8 @@ export const updateVisitService = async (visitId, data, currentUser) => {
    GET RECENT ACTIVITY
 ========================================================= */
 export const getRecentActivityService = async (currentUser) => {
-  let filter = {};
+  const scopedUserIds = await getHeadOfficeScopedUserIds(currentUser);
+  let filter = { user: { $in: scopedUserIds } };
 
   if (currentUser.role === 'TEAM') {
     filter.user = currentUser._id;
@@ -601,7 +619,8 @@ export const getVisitStatsService = async (currentUser) => {
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
 
-  let userFilter = {};
+  const scopedUserIds = await getHeadOfficeScopedUserIds(currentUser);
+  let userFilter = { user: { $in: scopedUserIds } };
 
   if (currentUser.role === 'TEAM') {
     userFilter = { user: currentUser._id };
@@ -839,7 +858,14 @@ const getUserPerformanceData = async (users, currentUser) => {
    BUILD USER FILTER (Helper)
 ========================================================= */
 const buildUserFilter = async (currentUser, options = {}) => {
-  const filter = { role: 'TEAM', ...(options.status && { status: options.status }) };
+  const scopedUserIds = await getHeadOfficeScopedUserIds(currentUser, {
+    roles: ['TEAM'],
+  });
+  const filter = {
+    role: 'TEAM',
+    _id: { $in: scopedUserIds },
+    ...(options.status && { status: options.status }),
+  };
 
   switch (currentUser.role) {
     case 'Head_office':
@@ -1153,6 +1179,12 @@ export const getTeamBySupervisorService = async (supervisorId, currentUser) => {
       throw new AppError("Access denied. You can only view your own team.", 403);
     }
 
+    const supervisorUser = await User.findById(supervisorId);
+    if (!supervisorUser) {
+      throw new AppError("Supervisor not found", 404);
+    }
+    await assertSameHeadOffice(currentUser, supervisorUser);
+
     const [teamMembers, supervisor, teamStats] = await Promise.all([
       User.find({ supervisor: supervisorId, role: 'TEAM', status: 'active' })
         .select('firstName lastName email phoneNumber lastLoginDate employeeId')
@@ -1231,7 +1263,11 @@ export const getTeamMemberPerformanceService = async (memberId, currentUser) => 
       const member = await User.findOne({ _id: memberId, supervisor: currentUser._id, role: 'TEAM' });
       canAccess = !!member;
     } else if (['Head_office', 'ZSM'].includes(currentUser.role)) {
-      canAccess = true;
+      const member = await User.findById(memberId).select('_id');
+      if (member) {
+        await assertSameHeadOffice(currentUser, member);
+        canAccess = true;
+      }
     }
 
     if (!canAccess) {

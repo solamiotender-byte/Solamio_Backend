@@ -3,14 +3,24 @@ import User from "../models/user.model.js";
 import Expense from "../models/expense.model.js";
 import Attendance from '../models/attendance.model.js'
 import { AppError } from "../errors/customError.js";
+import { getHeadOfficeScopedUserIds } from "../utils/headOfficeScope.js";
 
 /* ===============================
    ROLE BASED FILTER (COMMON)
 ================================ */
 const getReportFilter = async (currentUser, baseFilter = {}) => {
+  const scopedUserIds = await getHeadOfficeScopedUserIds(currentUser);
+
   // Head Office & ZSM → ALL
   if (["Head_office", "ZSM"].includes(currentUser.role)) {
-    return baseFilter;
+    return {
+      ...baseFilter,
+      $or: [
+        { assignedManager: { $in: scopedUserIds } },
+        { assignedUser: { $in: scopedUserIds } },
+        { createdBy: { $in: scopedUserIds } },
+      ],
+    };
   }
 
   // ASM → own + team
@@ -105,8 +115,9 @@ export const getExpenseReportService = async (query, user) => {
 
   const currentUser = await User.findById(user._id);
   if (!currentUser) throw new AppError("User not found", 404);
+  const scopedUserIds = await getHeadOfficeScopedUserIds(currentUser);
 
-  let filter = {};
+  let filter = { createdBy: { $in: scopedUserIds } };
 
   // TEAM → own
   if (currentUser.role === "TEAM") {
@@ -154,8 +165,9 @@ export const getAttendanceReportService = async (query, user) => {
 
   const currentUser = await User.findById(user._id);
   if (!currentUser) throw new AppError("User not found", 404);
+  const scopedUserIds = await getHeadOfficeScopedUserIds(currentUser);
 
-  let filter = {};
+  let filter = { user: { $in: scopedUserIds } };
 
   /* ===============================
      ROLE BASED FILTER

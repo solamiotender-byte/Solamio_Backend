@@ -30,7 +30,7 @@ export const getLocationPointsController = async (req, res, next) => {
       startDate: req.query.startDate,
       endDate:   req.query.endDate,
     };
-    const data = await getLocationPointsService(salesmanId, filters);
+    const data = await getLocationPointsService(salesmanId, req.user, filters);
     sendResponse(res, 200, "Location points fetched successfully", data);
   } catch (e) { next(e); }
 };
@@ -43,7 +43,7 @@ export const getTodayLocationPathController = async (req, res, next) => {
       startTime: req.query.startTime || null,
       endTime:   req.query.endTime   || null,
     };
-    const data = await getTodayLocationPathService(salesmanId, options);
+    const data = await getTodayLocationPathService(salesmanId, req.user, options);
     sendResponse(res, 200, "Today's location path fetched successfully", data);
   } catch (e) { next(e); }
 };
@@ -52,7 +52,7 @@ export const getLocationStatsController = async (req, res, next) => {
   try {
     const salesmanId = req.query.salesmanId || req.user._id;
     const { date } = req.query;
-    const data = await getLocationStatsService(salesmanId, date);
+    const data = await getLocationStatsService(salesmanId, req.user, date);
     sendResponse(res, 200, "Location statistics fetched successfully", data);
   } catch (e) { next(e); }
 };
@@ -63,7 +63,7 @@ export const getTotalDistanceController = async (req, res, next) => {
   try {
     const salesmanId = req.query.salesmanId || req.user._id;
     const { date }   = req.query;
-    const data       = await getTotalDistanceService(salesmanId, date);
+    const data       = await getTotalDistanceService(salesmanId, req.user, date);
     sendResponse(res, 200, "Total distance fetched successfully", data);
   } catch (e) { next(e); }
 };

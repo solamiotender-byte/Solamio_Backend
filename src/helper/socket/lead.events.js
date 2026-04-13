@@ -1,43 +1,50 @@
-// socket/events/lead.events.js
 import { getIO } from "./index.js";
+import {
+  getHeadOfficeIdForUser,
+  getScopedManagerRoomNames,
+} from "../../utils/headOfficeScope.js";
+
+const emitToScopedManagers = async (eventName, payload, user) => {
+  const io = getIO();
+  const headOfficeId = await getHeadOfficeIdForUser(user);
+
+  for (const room of getScopedManagerRoomNames(headOfficeId)) {
+    io.to(room).emit(eventName, payload);
+  }
+};
 
 export const emitLeadCreated = (lead, user) => {
   const io = getIO();
 
-  // Emit to assigned user
   if (lead.assignedUser) {
     io.to(`user-${lead.assignedUser}`).emit("lead-assigned", lead);
   }
 
-  // Emit to assigned manager
   if (lead.assignedManager) {
     io.to(`user-${lead.assignedManager}`).emit("lead-assigned", lead);
   }
 
-  // Emit to creator
   io.to(`user-${user._id}`).emit("lead-created", lead);
 
-  // Emit to managers
-  io.to("role-Head_office").emit("lead-created", lead);
-  io.to("role-ZSM").emit("lead-created", lead);
-  io.to("role-ASM").emit("lead-created", lead);
+  emitToScopedManagers("lead-created", lead, user).catch((error) => {
+    console.error("Scoped lead-created emit failed:", error.message);
+  });
 };
 
 export const emitLeadUpdated = (lead, user) => {
   const io = getIO();
 
-  // Emit to assigned user
   if (lead.assignedUser) {
     io.to(`user-${lead.assignedUser}`).emit("lead-updated", lead);
   }
 
-  // Emit to assigned manager
   if (lead.assignedManager) {
     io.to(`user-${lead.assignedManager}`).emit("lead-updated", lead);
   }
 
-  // Emit to managers
-  io.to("role-Head_office").emit("lead-updated", lead);
+  emitToScopedManagers("lead-updated", lead, user).catch((error) => {
+    console.error("Scoped lead-updated emit failed:", error.message);
+  });
 };
 
 export const emitLeadStatusChanged = (lead, oldStatus, newStatus, user) => {
@@ -50,21 +57,20 @@ export const emitLeadStatusChanged = (lead, oldStatus, newStatus, user) => {
     updatedBy: {
       id: user._id,
       name: `${user.firstName} ${user.lastName}`,
-      role: user.role
+      role: user.role,
     },
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   };
 
-  // Emit to assigned user
   if (lead.assignedUser) {
     io.to(`user-${lead.assignedUser}`).emit("lead-status-changed", data);
   }
 
-  // Emit to assigned manager
   if (lead.assignedManager) {
     io.to(`user-${lead.assignedManager}`).emit("lead-status-changed", data);
   }
 
-  // Emit to managers
-  io.to("role-Head_office").emit("lead-status-changed", data);
+  emitToScopedManagers("lead-status-changed", data, user).catch((error) => {
+    console.error("Scoped lead-status emit failed:", error.message);
+  });
 };

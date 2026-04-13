@@ -96,7 +96,7 @@ export const assignUserToManagerController = async (req, res, next) => {
 /* Get Manager List */
 export const getManagerListController = async (req, res, next) => {
   try {
-    const data = await getManagerList(req.query, req.user._id);
+    const data = await getManagerList(req.query, req.user);
     sendResponse(res, 200, "Manager list fetched successfully", data);
   } catch (error) {
     next(error);

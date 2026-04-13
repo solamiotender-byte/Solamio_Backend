@@ -3,6 +3,10 @@ import User from "../models/user.model.js";
 import mongoose from "mongoose";
 import { AppError, NotFoundError } from "../errors/customError.js";
 import { generateFullUrl } from "../utils/generateFullUrl.js";
+import {
+  assertSameHeadOffice,
+  getHeadOfficeScopedUserIds,
+} from "../utils/headOfficeScope.js";
 
 /* ================= Error Handler ================= */
 const handleError = (error, msg) => {
@@ -99,11 +103,17 @@ export const getExpensesService = async (query, user) => {
       userId
     } = query;
 
-    const filter = {};
+    const scopedUserIds = await getHeadOfficeScopedUserIds(user);
+    const filter = { createdBy: { $in: scopedUserIds } };
     const skip = (page - 1) * limit;
 
     if (user.role === "TEAM") filter.createdBy = user._id;
-    else if (userId) filter.createdBy = userId;
+    else if (userId) {
+      const selectedUser = await User.findById(userId);
+      if (!selectedUser) throw new NotFoundError("User", userId);
+      await assertSameHeadOffice(user, selectedUser);
+      filter.createdBy = selectedUser._id;
+    }
 
     if (status) filter.status = status;
     if (category) filter.category = category;
@@ -141,12 +151,17 @@ export const getExpensesService = async (query, user) => {
 /* ==================================================
    GET BY ID
 ================================================== */
-export const getExpenseByIdService = async (id) => {
+export const getExpenseByIdService = async (id, user) => {
   try {
     const expense = await Expense.findById(id)
       .populate("createdBy approvedBy", "name email role");
 
     if (!expense) throw new NotFoundError("Expense", id);
+    if (user) {
+      const owner = await User.findById(expense.createdBy);
+      if (!owner) throw new NotFoundError("User", expense.createdBy);
+      await assertSameHeadOffice(user, owner);
+    }
     return expense;
   } catch (error) {
     handleError(error, "Failed to fetch expense");
@@ -160,6 +175,9 @@ export const updateExpenseService = async (id, data, user) => {
   try {
     const expense = await Expense.findById(id);
     if (!expense) throw new NotFoundError("Expense", id);
+    const owner = await User.findById(expense.createdBy);
+    if (!owner) throw new NotFoundError("User", expense.createdBy);
+    await assertSameHeadOffice(user, owner);
 
     if (expense.status !== "Pending")
       throw new AppError("Approved/Rejected expense cannot be updated", 400);
@@ -198,8 +216,13 @@ export const updateExpenseService = async (id, data, user) => {
 ================================================== */
 export const deleteExpenseService = async (id, user) => {
   try {
-    const exp = await Expense.findByIdAndDelete(id);
+    const exp = await Expense.findById(id);
     if (!exp) throw new NotFoundError("Expense", id);
+    const owner = await User.findById(exp.createdBy);
+    if (!owner) throw new NotFoundError("User", exp.createdBy);
+    await assertSameHeadOffice(user, owner);
+
+    await exp.deleteOne();
 
     return { message: "Expense deleted successfully" };
     
@@ -218,6 +241,9 @@ export const approveExpenseService = async (id, user, remarks) => {
 
     const expense = await Expense.findById(id);
     if (!expense) throw new NotFoundError("Expense", id);
+    const owner = await User.findById(expense.createdBy);
+    if (!owner) throw new NotFoundError("User", expense.createdBy);
+    await assertSameHeadOffice(user, owner);
 
     if (expense.status !== "Pending")
       throw new AppError(`Already ${expense.status}`, 400);
@@ -239,6 +265,9 @@ export const rejectExpenseService = async (id, user, reason) => {
 
     const expense = await Expense.findById(id);
     if (!expense) throw new NotFoundError("Expense", id);
+    const owner = await User.findById(expense.createdBy);
+    if (!owner) throw new NotFoundError("User", expense.createdBy);
+    await assertSameHeadOffice(user, owner);
 
     expense.status = "Rejected";
     expense.approvedBy = user._id;
@@ -255,11 +284,17 @@ export const rejectExpenseService = async (id, user, reason) => {
 export const getExpenseStatsService = async (query, user) => {
   try {
     const { period, userId, category } = query;
+    const scopedUserIds = await getHeadOfficeScopedUserIds(user);
 
-    let matchStage = {};
+    let matchStage = {
+      createdBy: { $in: scopedUserIds.map((id) => new mongoose.Types.ObjectId(id)) },
+    };
 
     // User filter
     if (userId) {
+      const targetUser = await User.findById(userId);
+      if (!targetUser) throw new NotFoundError("User", userId);
+      await assertSameHeadOffice(user, targetUser);
       matchStage.createdBy = new mongoose.Types.ObjectId(userId);
     } else if (user.role === "TEAM") {
       matchStage.createdBy = user._id;

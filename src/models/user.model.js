@@ -74,6 +74,12 @@ const userSchema = new mongoose.Schema(
       ref: "User",
       default: null,
     },
+    headOffice: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+      index: true,
+    },
     status: {
       type: String,
       enum: ["active", "inactive"],

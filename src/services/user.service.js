@@ -1,9 +1,15 @@
 import User from "../models/user.model.js";
+import mongoose from "mongoose";
 import {
   AppError,
   NotFoundError,
   ValidationError,
 } from "../errors/customError.js";
+import {
+  assertSameHeadOffice,
+  getHeadOfficeIdForUser,
+  getHeadOfficeScopedUserIds,
+} from "../utils/headOfficeScope.js";
 
 const handleError = (error, defaultMessage) => {
   if (error instanceof AppError) throw error;
@@ -56,6 +62,7 @@ export const createUserService = async (data, createdById) => {
     if (supervisor) {
       const supervisorUser = await User.findById(supervisor);
       if (!supervisorUser) throw new NotFoundError("Supervisor", supervisor);
+      await assertSameHeadOffice(createdBy, supervisorUser);
 
       const validSupervisorRoles = ["ZSM", "ASM", "Head_office"];
       if (!validSupervisorRoles.includes(supervisorUser.role)) {
@@ -63,11 +70,20 @@ export const createUserService = async (data, createdById) => {
       }
     }
 
+    const newUserId = new mongoose.Types.ObjectId();
+    const creatorHeadOfficeId = await getHeadOfficeIdForUser(createdBy);
+    const headOfficeId =
+      role === "Head_office"
+        ? newUserId
+        : creatorHeadOfficeId || (createdBy.role === "Head_office" ? createdBy._id : null);
+
     const newUser = new User({
+      _id: newUserId,
       ...data,
       email: email.toLowerCase(),
       supervisor: supervisor || (createdBy.role === "ASM" ? createdBy._id : null),
       createdBy: createdBy._id,
+      headOffice: headOfficeId,
       viewPassword: data.password,
       status: data.status || "active",
     });
@@ -120,6 +136,9 @@ export const getUsersService = async (query, currentUser) => {
     const skip = (Number(page) - 1) * Number(limit);
     const filter = {};
     const andConditions = [];
+    const scopedUserIds = await getHeadOfficeScopedUserIds(currentUser);
+
+    andConditions.push({ _id: { $in: scopedUserIds } });
 
     if (search) {
       andConditions.push({
@@ -183,6 +202,7 @@ export const getUserProfileService = async (userId, currentUser) => {
       .populate("createdBy", "firstName lastName role");
 
     if (!user) throw new NotFoundError("User", userId);
+    await assertSameHeadOffice(currentUser, user);
 
     if (
       currentUser.role === "ASM" &&
@@ -219,10 +239,13 @@ export const getUserProfileService = async (userId, currentUser) => {
 /* ============================
    Update User
 ============================ */
-export const updateUserService = async (userId, data) => {
+export const updateUserService = async (userId, data, currentUser) => {
   try {
     const user = await User.findById(userId);
     if (!user) throw new NotFoundError("User", userId);
+    if (currentUser) {
+      await assertSameHeadOffice(currentUser, user);
+    }
 
     // ✅ Fixed: "phoneNumber" not "phone"
     const allowedFields = ["firstName", "lastName", "email", "phoneNumber", "role", "status"];
@@ -254,6 +277,7 @@ export const toggleUserStatusService = async (userId, currentUser) => {
   try {
     const user = await User.findById(userId);
     if (!user) throw new NotFoundError("User", userId);
+    await assertSameHeadOffice(currentUser, user);
 
     if (user._id.toString() === currentUser._id.toString()) {
       throw new AppError("You cannot change your own status", 400);
@@ -308,6 +332,7 @@ export const getViewPasswordService = async (userId, currentUser) => {
 
     const user = await User.findById(userId);
     if (!user) throw new NotFoundError("User", userId);
+    await assertSameHeadOffice(currentUser, user);
 
     if (!user.viewPassword) {
       throw new AppError("Password not available for viewing", 404);
@@ -331,6 +356,7 @@ export const deleteUserService = async (userId, currentUser) => {
   try {
     const user = await User.findById(userId);
     if (!user) throw new NotFoundError("User", userId);
+    await assertSameHeadOffice(currentUser, user);
 
     if (user._id.toString() === currentUser._id.toString()) {
       throw new AppError("You cannot delete your own account", 400);
@@ -373,6 +399,8 @@ export const assignUserToManagerService = async (userId, managerId, currentUser)
 
     const manager = await User.findById(managerId);
     if (!manager) throw new NotFoundError("Manager", managerId);
+    await assertSameHeadOffice(currentUser, user);
+    await assertSameHeadOffice(currentUser, manager);
 
     if (!["ZSM", "ASM"].includes(manager.role)) {
       // ✅ Fixed: correct ValidationError call
@@ -427,7 +455,11 @@ export const getTeamUnderAsmList = async (query, userId) => {
     const requestingUser = await User.findById(userId).select("role");
     if (!requestingUser) throw new AppError("User not found", 404);
 
-    let filter = { role: "TEAM" };
+    const scopedUserIds = await getHeadOfficeScopedUserIds(requestingUser, {
+      roles: ["TEAM"],
+    });
+
+    let filter = { role: "TEAM", _id: { $in: scopedUserIds } };
 
     if (requestingUser.role === "ASM") {
       filter.$or = [
@@ -502,7 +534,7 @@ export const getTeamUnderAsmList = async (query, userId) => {
 /* ============================
   Get Manager List
 ============================ */
-export const getManagerList = async (query) => {
+export const getManagerList = async (query, currentUser) => {
   try {
     const {
       page = 1,
@@ -514,7 +546,11 @@ export const getManagerList = async (query) => {
     } = query;
 
     const skip = (page - 1) * limit;
-    let filter = { role: "ASM" };
+    const scopedUserIds = await getHeadOfficeScopedUserIds(currentUser, {
+      roles: ["ASM"],
+    });
+
+    let filter = { role: "ASM", _id: { $in: scopedUserIds } };
 
     if (search) {
       filter.$or = [

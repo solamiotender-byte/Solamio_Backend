@@ -1,6 +1,8 @@
 // services/locationPoint.service.js
 import LocationPoint from "../models/locationPoint.js";
 import { AppError } from "../errors/customError.js";
+import User from "../models/user.model.js";
+import { assertSameHeadOffice } from "../utils/headOfficeScope.js";
 
 const handleError = (error, msg) => {
   if (error instanceof AppError) throw error;
@@ -57,8 +59,12 @@ export const createLocationPointService = async (data, currentUser) => {
 };
 
 // ─── Get Location Points by Salesman ─────────────────────────────────────────
-export const getLocationPointsService = async (salesmanId, filters = {}) => {
+export const getLocationPointsService = async (salesmanId, currentUser, filters = {}) => {
   try {
+    const salesman = await User.findById(salesmanId);
+    if (!salesman) throw new AppError("User not found", 404);
+    await assertSameHeadOffice(currentUser, salesman);
+
     const query = { salesmanId };
 
     if (filters.date) {
@@ -75,8 +81,12 @@ export const getLocationPointsService = async (salesmanId, filters = {}) => {
 };
 
 // ─── Get Today's Location Path (last 24 hours) ───────────────────────────────
-export const getTodayLocationPathService = async (salesmanId, options = {}) => {
+export const getTodayLocationPathService = async (salesmanId, currentUser, options = {}) => {
   try {
+    const salesman = await User.findById(salesmanId);
+    if (!salesman) throw new AppError("User not found", 404);
+    await assertSameHeadOffice(currentUser, salesman);
+
     let query = { salesmanId };
 
     if (options.startTime && options.endTime) {
@@ -103,8 +113,12 @@ export const getTodayLocationPathService = async (salesmanId, options = {}) => {
 
 // ─── Get Total Distance for a Date ───────────────────────────────────────────
 // Returns total km travelled by summing distanceFromPrevious for all points.
-export const getTotalDistanceService = async (salesmanId, date) => {
+export const getTotalDistanceService = async (salesmanId, currentUser, date) => {
   try {
+    const salesman = await User.findById(salesmanId);
+    if (!salesman) throw new AppError("User not found", 404);
+    await assertSameHeadOffice(currentUser, salesman);
+
     const targetDate = date || new Date().toISOString().split("T")[0];
 
     const result = await LocationPoint.aggregate([
@@ -132,8 +146,12 @@ export const getTotalDistanceService = async (salesmanId, date) => {
 };
 
 // ─── Get Location Statistics ──────────────────────────────────────────────────
-export const getLocationStatsService = async (salesmanId, date) => {
+export const getLocationStatsService = async (salesmanId, currentUser, date) => {
   try {
+    const salesman = await User.findById(salesmanId);
+    if (!salesman) throw new AppError("User not found", 404);
+    await assertSameHeadOffice(currentUser, salesman);
+
     const targetDate = date || new Date().toISOString().split("T")[0];
 
     const stats = await LocationPoint.aggregate([

@@ -1,5 +1,6 @@
 // services/auth.service.js
 import bcrypt from "bcryptjs";
+import mongoose from "mongoose";
 import User from "../models/user.model.js";
 import { AppError, NotFoundError } from "../errors/customError.js";
 
@@ -25,7 +26,12 @@ export const register = async (userData) => {
     if (existingUser) throw new AppError("User already exists", 400);
 
     // ✅ Pass plain password — the pre-save hook handles hashing
-    const newUser = new User({ ...userData });
+    const newUserId = new mongoose.Types.ObjectId();
+    const newUser = new User({
+      _id: newUserId,
+      ...userData,
+      headOffice: userData.role === "Head_office" ? newUserId : userData.headOffice || null,
+    });
     await newUser.save();
 
     const result = newUser.toObject();

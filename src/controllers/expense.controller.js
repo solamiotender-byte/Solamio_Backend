@@ -45,7 +45,7 @@ export const getExpensesController = async (req, res, next) => {
 
 export const getExpenseController = async (req, res, next) => {
   try {
-    const data = await getExpenseByIdService(req.params.id);
+    const data = await getExpenseByIdService(req.params.id, req.user);
     sendResponse(res, 200, "Expense fetched successfully", data);
   } catch (e) {
     next(e);
@@ -71,8 +71,7 @@ export const updateExpenseController = async (req, res, next) => {
     const data = await updateExpenseService(
       req.params.id,
       req.body,
-      req.user.role,
-      req.file
+      req.user
     );
     sendResponse(res, 200, "Expense updated successfully", data);
   } catch (e) {
@@ -82,7 +81,7 @@ export const updateExpenseController = async (req, res, next) => {
 
 export const deleteExpenseController = async (req, res, next) => {
   try {
-    const data = await deleteExpenseService(req.params.id, req.user.role);
+    const data = await deleteExpenseService(req.params.id, req.user);
     sendResponse(res, 200, data.message, null);
   } catch (e) {
     next(e);
