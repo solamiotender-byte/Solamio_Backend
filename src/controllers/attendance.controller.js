@@ -1,6 +1,7 @@
 import {
     punchInService,
     punchOutService,
+    markHolidayService,
     getAllAttendanceService,
     getAttendanceByIdService,
     updateAttendanceService,
@@ -40,6 +41,20 @@ export const punchOut = async (req, res, next) => {
             req.files
         );
         sendResponse(res, 200, "Punch out successful", data);
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * @desc    Mark a date as holiday for all scoped users
+ * @route   POST /api/attendance/holiday
+ * @access  Private (Head Office only)
+ */
+export const markHoliday = async (req, res, next) => {
+    try {
+        const data = await markHolidayService(req.body, req.user);
+        sendResponse(res, 200, "Holiday created successfully", data);
     } catch (error) {
         next(error);
     }

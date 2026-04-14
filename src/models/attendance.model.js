@@ -18,6 +18,11 @@ const attendanceSchema = new mongoose.Schema(
                 lng: Number
             },
             address: String,
+            battery: {
+                percentage: Number,
+                isCharging: { type: Boolean, default: false },
+                recordedAt: Date
+            }
         },
         punchOut: {
             time: Date,
@@ -26,7 +31,12 @@ const attendanceSchema = new mongoose.Schema(
                 lng: Number
             },
             address: String,
-             isAutoPunchOut: { type: Boolean, default: false }
+            battery: {
+                percentage: Number,
+                isCharging: { type: Boolean, default: false },
+                recordedAt: Date
+            },
+            isAutoPunchOut: { type: Boolean, default: false }
         },
         remarks: String,
         missedPunchOut: { type: Boolean, default: false },

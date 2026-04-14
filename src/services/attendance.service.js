@@ -15,17 +15,22 @@ import {
 /* ================= PUNCH IN ================= */
 export const punchInService = async (data, currentUser, files = []) => {
   try {
-    const { latitude, longitude } = data;
+    const { latitude, longitude, batteryPercentage, isCharging, time } = data;
 
     if (!latitude || !longitude) {
       throw new AppError("Location coordinates are required for punch in", 400);
+    }
+
+    const punchInTime = time ? new Date(time) : new Date();
+    if (Number.isNaN(punchInTime.getTime())) {
+      throw new AppError("Invalid punch-in time", 400);
     }
 
     /* ===============================
        CHECK TODAY ATTENDANCE
     =============================== */
 
-    const today = new Date();
+    const today = new Date(punchInTime);
     today.setHours(0, 0, 0, 0);
 
     const tomorrow = new Date(today);
@@ -59,12 +64,21 @@ export const punchInService = async (data, currentUser, files = []) => {
     =============================== */
 
     const punchInData = {
-      time: new Date(),
+      time: punchInTime,
       location: {
         lat: parseFloat(latitude),
         lng: parseFloat(longitude)
       },
-      address
+      address,
+      ...(batteryPercentage !== undefined && batteryPercentage !== null
+        ? {
+            battery: {
+              percentage: Number(batteryPercentage),
+              isCharging: Boolean(isCharging),
+              recordedAt: new Date(),
+            }
+          }
+        : {})
     };
 
     let attendance;
@@ -72,16 +86,40 @@ export const punchInService = async (data, currentUser, files = []) => {
     if (existingAttendance) {
       existingAttendance.punchIn = punchInData;
       existingAttendance.status = "present";
+      if (batteryPercentage !== undefined && batteryPercentage !== null) {
+        const existingMetadata = existingAttendance.metadata instanceof Map
+          ? Object.fromEntries(existingAttendance.metadata)
+          : (existingAttendance.metadata || {});
+        existingAttendance.metadata = {
+          ...existingMetadata,
+          batteryAtPunchIn: {
+            percentage: Number(batteryPercentage),
+            isCharging: Boolean(isCharging),
+            recordedAt: new Date(),
+          },
+        };
+      }
       await existingAttendance.save();
       attendance = existingAttendance;
     } else {
       attendance = await Attendance.create({
         user: currentUser._id,
-        date: new Date(),
+        date: punchInTime,
         punchIn: punchInData,
         status: "present",
         workHours: 0,
-        overtime: 0
+        overtime: 0,
+        ...(batteryPercentage !== undefined && batteryPercentage !== null
+          ? {
+              metadata: {
+                batteryAtPunchIn: {
+                  percentage: Number(batteryPercentage),
+                  isCharging: Boolean(isCharging),
+                  recordedAt: new Date(),
+                },
+              },
+            }
+          : {})
       });
     }
 
@@ -99,9 +137,9 @@ export const punchInService = async (data, currentUser, files = []) => {
         lng: parseFloat(longitude)
       },
       status: "InProgress",
-      checkInTime: new Date(),
-      checkOutTime: new Date(),
-      visitDate: new Date(),
+      checkInTime: punchInTime,
+      checkOutTime: punchInTime,
+      visitDate: punchInTime,
       timeSpentMinutes: 0,
       distanceFromPreviousKm: 0,
       totalDistanceTillNowKm: 0,
@@ -131,13 +169,18 @@ export const punchInService = async (data, currentUser, files = []) => {
 /* ================= PUNCH OUT ================= */
 export const punchOutService = async (data, currentUser, files = []) => {
   try {
-    const { latitude, longitude } = data;
+    const { latitude, longitude, batteryPercentage, isCharging, time } = data;
 
     if (!latitude || !longitude) {
       throw new AppError("Location coordinates are required for punch out", 400);
     }
 
-    const today = new Date();
+    const punchOutTime = time ? new Date(time) : new Date();
+    if (Number.isNaN(punchOutTime.getTime())) {
+      throw new AppError("Invalid punch-out time", 400);
+    }
+
+    const today = new Date(punchOutTime);
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -164,7 +207,6 @@ export const punchOutService = async (data, currentUser, files = []) => {
       address = await getAddressFromCoords(parseFloat(latitude), parseFloat(longitude));
     }
 
-    const punchOutTime = new Date();
     const workMs = punchOutTime - new Date(attendance.punchIn.time);
     const workHours = Number((workMs / (1000 * 60 * 60)).toFixed(2));
 
@@ -176,6 +218,15 @@ export const punchOutService = async (data, currentUser, files = []) => {
         lng: parseFloat(longitude)
       },
       address: address || "Address not available",
+      ...(batteryPercentage !== undefined && batteryPercentage !== null
+        ? {
+            battery: {
+              percentage: Number(batteryPercentage),
+              isCharging: Boolean(isCharging),
+              recordedAt: new Date(),
+            },
+          }
+        : {}),
       isAutoPunchOut: false                // ← user did this manually
     };
     attendance.workHours = workHours;
@@ -183,6 +234,20 @@ export const punchOutService = async (data, currentUser, files = []) => {
 
     if (workHours > 8) {
       attendance.overtime = Number((workHours - 8).toFixed(2));
+    }
+
+    if (batteryPercentage !== undefined && batteryPercentage !== null) {
+      const existingMetadata = attendance.metadata instanceof Map
+        ? Object.fromEntries(attendance.metadata)
+        : (attendance.metadata || {});
+      attendance.metadata = {
+        ...existingMetadata,
+        batteryAtPunchOut: {
+          percentage: Number(batteryPercentage),
+          isCharging: Boolean(isCharging),
+          recordedAt: new Date(),
+        },
+      };
     }
 
     await attendance.save();
@@ -194,6 +259,114 @@ export const punchOutService = async (data, currentUser, files = []) => {
     console.error('Punch Out Service Error:', error);
     if (error instanceof AppError) throw error;
     throw new AppError(error.message || "Failed to punch out", 500);
+  }
+};
+
+
+/* ================= MARK HOLIDAY ================= */
+export const markHolidayService = async (data, currentUser) => {
+  try {
+    if (!["Head_office"].includes(currentUser.role)) {
+      throw new AppError("Unauthorized to create holidays", 403);
+    }
+
+    const { date, reason } = data;
+
+    if (!date) {
+      throw new AppError("Holiday date is required", 400);
+    }
+
+    if (!reason || !String(reason).trim()) {
+      throw new AppError("Holiday reason is required", 400);
+    }
+
+    const [yyyy, mm, dd] = String(date).split("-").map(Number);
+    const startDate = new Date(yyyy, (mm || 1) - 1, dd || 1, 0, 0, 0, 0);
+    if (Number.isNaN(startDate.getTime())) {
+      throw new AppError("Invalid holiday date", 400);
+    }
+    const endDate = new Date(startDate);
+    endDate.setDate(endDate.getDate() + 1);
+
+    const scopedUserIds = await getHeadOfficeScopedUserIds(currentUser, {
+      roles: ["TEAM", "ASM", "ZSM"],
+      includeInactive: false,
+    });
+
+    if (!scopedUserIds.length) {
+      return {
+        date: startDate,
+        reason: String(reason).trim(),
+        createdCount: 0,
+        updatedCount: 0,
+        skippedCount: 0,
+      };
+    }
+
+    const existingAttendances = await Attendance.find({
+      user: { $in: scopedUserIds },
+      date: { $gte: startDate, $lt: endDate },
+    });
+
+    const existingByUser = new Map(
+      existingAttendances.map((attendance) => [attendance.user.toString(), attendance])
+    );
+
+    let createdCount = 0;
+    let updatedCount = 0;
+    let skippedCount = 0;
+    const holidayReason = String(reason).trim();
+
+    for (const userId of scopedUserIds) {
+      const normalizedUserId = userId.toString();
+      const attendance = existingByUser.get(normalizedUserId);
+
+      if (!attendance) {
+        await Attendance.create({
+          user: userId,
+          date: startDate,
+          status: "holiday",
+          remarks: holidayReason,
+          metadata: {
+            holidayReason,
+            holidayMarkedBy: currentUser._id,
+            holidayMarkedAt: new Date(),
+          },
+        });
+        createdCount += 1;
+        continue;
+      }
+
+      if (attendance.punchIn?.time || attendance.punchOut?.time) {
+        skippedCount += 1;
+        continue;
+      }
+
+      const existingMetadata = attendance.metadata instanceof Map
+        ? Object.fromEntries(attendance.metadata)
+        : (attendance.metadata || {});
+
+      attendance.status = "holiday";
+      attendance.remarks = holidayReason;
+      attendance.metadata = {
+        ...existingMetadata,
+        holidayReason,
+        holidayMarkedBy: currentUser._id,
+        holidayMarkedAt: new Date(),
+      };
+      await attendance.save();
+      updatedCount += 1;
+    }
+
+    return {
+      date: startDate,
+      reason: holidayReason,
+      createdCount,
+      updatedCount,
+      skippedCount,
+    };
+  } catch (error) {
+    throw new AppError(error.message || "Failed to mark holiday", 500);
   }
 };
 
@@ -407,7 +580,8 @@ export const getAllAttendanceService = async (query, currentUser) => {
         ? {
             time: att.punchIn.time,
             address: att.punchIn.address,
-            location: att.punchIn.location
+            location: att.punchIn.location,
+            battery: att.punchIn.battery || att.metadata?.get?.("batteryAtPunchIn") || att.metadata?.batteryAtPunchIn || null
           }
         : null,
 
@@ -416,6 +590,7 @@ export const getAllAttendanceService = async (query, currentUser) => {
             time: att.punchOut.time,
             address: att.punchOut.address,
             location: att.punchOut.location,
+            battery: att.punchOut.battery || att.metadata?.get?.("batteryAtPunchOut") || att.metadata?.batteryAtPunchOut || null,
             isAutoPunchOut: att.punchOut.isAutoPunchOut || false  // ✅ was it auto?
           }
         : null,
@@ -432,6 +607,7 @@ export const getAllAttendanceService = async (query, currentUser) => {
       overtime: att.overtime,
       status: att.status,
       remarks: att.remarks || null,
+      metadata: att.metadata || null,
 
       createdAt: att.createdAt,
       updatedAt: att.updatedAt

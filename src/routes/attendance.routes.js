@@ -5,6 +5,7 @@ import { upload } from '../middlewares/upload.js';
 import {
   punchIn,
   punchOut,
+  markHoliday,
   getAllAttendance,
   getAttendanceById,
   updateAttendance,
@@ -34,6 +35,13 @@ router.post(
   allowRoles(['TEAM']),
   upload.array('photos', 5),
   punchOut
+);
+
+router.post(
+  '/holiday',
+  authenticate,
+  allowRoles(adminRoles),
+  markHoliday
 );
 
 // ==================== GET ALL ATTENDANCE ====================
