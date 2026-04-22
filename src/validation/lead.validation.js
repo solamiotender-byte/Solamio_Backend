@@ -52,6 +52,7 @@ export const updateLeadValidation = [
   body("status")
     .optional()
     .isIn([
+      "New",
       "Visit",
       "Registration",
       "Bank Loan Apply",

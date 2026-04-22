@@ -22,6 +22,9 @@ function haversineKm(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+const MIN_MOVEMENT_KM = 0.005;
+const MAX_REASONABLE_JUMP_KM = 5;
+
 // ─── Create single Location Point ────────────────────────────────────────────
 export const createLocationPointService = async (data, currentUser) => {
   try {
@@ -39,8 +42,9 @@ export const createLocationPointService = async (data, currentUser) => {
     let distanceFromPrevious = 0;
     if (lastPoint) {
       const dist = haversineKm(lastPoint.lat, lastPoint.lng, data.lat, data.lng);
-      // Ignore impossible jumps > 5km (bad GPS fix)
-      distanceFromPrevious = dist <= 5 ? dist : 0;
+      if (dist >= MIN_MOVEMENT_KM && dist <= MAX_REASONABLE_JUMP_KM) {
+        distanceFromPrevious = dist;
+      }
     }
 
     const locationPoint = await LocationPoint.create({
@@ -221,7 +225,9 @@ export const bulkCreateLocationPointsService = async (points, currentUser) => {
       let distanceFromPrevious = 0;
       if (prevLat !== null && prevLng !== null) {
         const dist = haversineKm(prevLat, prevLng, point.lat, point.lng);
-        distanceFromPrevious = dist <= 5 ? dist : 0; // ignore bad jumps > 5km
+        if (dist >= MIN_MOVEMENT_KM && dist <= MAX_REASONABLE_JUMP_KM) {
+          distanceFromPrevious = dist;
+        }
       }
 
       prevLat = point.lat;

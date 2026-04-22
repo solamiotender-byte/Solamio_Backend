@@ -1,6 +1,7 @@
 // services/attendance.service.js
 import Attendance from "../models/attendance.model.js";
 import User from "../models/user.model.js";
+import LocationPoint from "../models/locationPoint.js";
 import { AppError } from "../errors/customError.js";
 import { getAddressFromCoords } from "../utils/locationUtils.js";
 import Visit from '../models/visit.model.js'
@@ -9,6 +10,63 @@ import {
   assertSameHeadOffice,
   getHeadOfficeScopedUserIds,
 } from "../utils/headOfficeScope.js";
+
+const MIN_MOVEMENT_KM = 0.005;
+const MAX_REASONABLE_JUMP_KM = 5;
+
+const haversineKm = (lat1, lng1, lat2, lng2) => {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
+const storeAttendanceLocationPoint = async ({
+  userId,
+  latitude,
+  longitude,
+  accuracy = 0,
+  speed = 0,
+  recordedAt,
+}) => {
+  if (latitude == null || longitude == null || !recordedAt) return;
+
+  const lat = Number(latitude);
+  const lng = Number(longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+  const date = new Date(recordedAt).toISOString().split("T")[0];
+  const lastPoint = await LocationPoint.findOne(
+    { salesmanId: userId, date },
+    { lat: 1, lng: 1, recordedAt: 1 },
+    { sort: { recordedAt: -1 } }
+  );
+
+  let distanceFromPrevious = 0;
+  if (lastPoint) {
+    const dist = haversineKm(lastPoint.lat, lastPoint.lng, lat, lng);
+    if (dist >= MIN_MOVEMENT_KM && dist <= MAX_REASONABLE_JUMP_KM) {
+      distanceFromPrevious = dist;
+    }
+  }
+
+  await LocationPoint.create({
+    salesmanId: userId,
+    date,
+    lat,
+    lng,
+    accuracy: Number(accuracy ?? 0),
+    speed: Number(speed ?? 0),
+    recordedAt,
+    distanceFromPrevious,
+    expiresAt: new Date(recordedAt.getTime() + 24 * 60 * 60 * 1000),
+  });
+};
 
 
 
@@ -122,6 +180,15 @@ export const punchInService = async (data, currentUser, files = []) => {
           : {})
       });
     }
+
+    await storeAttendanceLocationPoint({
+      userId: currentUser._id,
+      latitude,
+      longitude,
+      accuracy: data.accuracy,
+      speed: data.speed,
+      recordedAt: punchInTime,
+    });
 
     /* ===============================
        CREATE FIRST VISIT (START POINT)
@@ -251,6 +318,15 @@ export const punchOutService = async (data, currentUser, files = []) => {
     }
 
     await attendance.save();
+
+    await storeAttendanceLocationPoint({
+      userId: currentUser._id,
+      latitude,
+      longitude,
+      accuracy: data.accuracy,
+      speed: data.speed,
+      recordedAt: punchOutTime,
+    });
 
     return await Attendance.findById(attendance._id)
       .populate('user', 'firstName lastName email phoneNumber role');
