@@ -6,6 +6,10 @@ import { v4 as uuidv4 } from "uuid";
 import s3Client, { BUCKET_NAME } from "../config/aws.js";
 import { generateFullUrl } from "../utils/generateFullUrl.js";
 
+const s3Enabled =
+  (process.env.USE_S3 === "true" || process.env.NODE_ENV === "production") &&
+  Boolean(BUCKET_NAME);
+
 /* --------------------------------------------------
    FILE FILTER (AUTO-DETECT BY MIME TYPE)
 -------------------------------------------------- */
@@ -65,26 +69,28 @@ const getFolder = (req, file) => {
 /* --------------------------------------------------
    S3 STORAGE
 -------------------------------------------------- */
-const s3Storage = multerS3({
-  s3: s3Client,
-  bucket: BUCKET_NAME,
-  contentType: multerS3.AUTO_CONTENT_TYPE,
+const s3Storage = s3Enabled
+  ? multerS3({
+      s3: s3Client,
+      bucket: BUCKET_NAME,
+      contentType: multerS3.AUTO_CONTENT_TYPE,
 
-  metadata: (req, file, cb) => {
-    cb(null, {
-      uploadedBy: req.user?.email || "system",
-      originalName: file.originalname,
-      uploadedAt: new Date().toISOString(),
-    });
-  },
+      metadata: (req, file, cb) => {
+        cb(null, {
+          uploadedBy: req.user?.email || "system",
+          originalName: file.originalname,
+          uploadedAt: new Date().toISOString(),
+        });
+      },
 
-  key: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    const folder = getFolder(req, file);
-    const filename = `${folder}/${Date.now()}-${uuidv4()}${ext}`;
-    cb(null, filename);
-  },
-});
+      key: (req, file, cb) => {
+        const ext = path.extname(file.originalname);
+        const folder = getFolder(req, file);
+        const filename = `${folder}/${Date.now()}-${uuidv4()}${ext}`;
+        cb(null, filename);
+      },
+    })
+  : null;
 
 /* --------------------------------------------------
    LOCAL STORAGE (DEV / FALLBACK)
@@ -117,11 +123,13 @@ const localStorage = multer.diskStorage({
 /* --------------------------------------------------
    STORAGE SELECTOR
 -------------------------------------------------- */
-const storage =
-  process.env.USE_S3 === "true" ||
-  process.env.NODE_ENV === "production"
-    ? s3Storage
-    : localStorage;
+if (!s3Enabled && (process.env.USE_S3 === "true" || process.env.NODE_ENV === "production")) {
+  console.warn(
+    "S3 upload storage was requested but AWS_BUCKET_NAME is missing. Falling back to local storage."
+  );
+}
+
+const storage = s3Enabled ? s3Storage : localStorage;
 
 /* --------------------------------------------------
    MULTER INSTANCE

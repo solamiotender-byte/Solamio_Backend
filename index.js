@@ -1,7 +1,8 @@
 import dotenv from "dotenv";
 import { createServer } from "http";
 import mongoose from "mongoose";
-
+import dns from "dns"
+dns.setServers(["1.1.1.1","8.8.8.8"])
 import app from "./src/app.js";
 import connectDB from "./src/config/mongoDB.js";
 import { initializeSocket } from "./src/helper/socket/index.js";
