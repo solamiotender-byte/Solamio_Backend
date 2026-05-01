@@ -34,7 +34,5 @@ const locationPointSchema = new mongoose.Schema(
 
 locationPointSchema.index({ salesmanId: 1, date: 1 });
 locationPointSchema.index({ salesmanId: 1, recordedAt: 1 });
-locationPointSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
-
 const LocationPoint = mongoose.model("LocationPoint", locationPointSchema);
 export default LocationPoint;

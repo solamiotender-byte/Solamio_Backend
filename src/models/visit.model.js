@@ -180,9 +180,7 @@ const visitSchema = new mongoose.Schema(
 
 visitSchema.index({ user: 1, createdAt: -1 });
 visitSchema.index({ user: 1, status: 1 });
-visitSchema.index({ attendance: 1 });
 visitSchema.index({ coordinates: "2dsphere" });
-visitSchema.index({ leadCreated: 1 }); // Index for lead lookup
 visitSchema.index({ isLeadCreate: 1, createdAt: -1 }); // For filtering leads created from visits
 
 /* ================= VIRTUALS ================= */

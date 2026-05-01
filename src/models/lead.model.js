@@ -213,7 +213,6 @@
 
   /* 🔹 Indexes */
   LeadSchema.index({ email: 1, phone: 1 });
-  LeadSchema.index({ status: 1 });
   LeadSchema.index({ loanStatus: 1 });
   LeadSchema.index({ disbursementStatus: 1 });
   LeadSchema.index({ createdAt: -1 });
