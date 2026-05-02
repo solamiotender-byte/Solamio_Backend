@@ -1,37 +1,44 @@
+import crypto from "crypto";
+import fs from "fs";
 import multer from "multer";
 import multerS3 from "multer-s3";
 import path from "path";
-import fs from "fs";
 import { v4 as uuidv4 } from "uuid";
 import s3Client, { BUCKET_NAME } from "../config/aws.js";
 import { generateFullUrl } from "../utils/generateFullUrl.js";
 
-const s3Enabled =
-  (process.env.USE_S3 === "true" || process.env.NODE_ENV === "production") &&
-  Boolean(BUCKET_NAME);
+const useS3Flag = process.env.USE_S3?.trim().toLowerCase();
+const useCloudinaryFlag = process.env.USE_CLOUDINARY?.trim().toLowerCase();
+
+const cloudinaryRequested = useCloudinaryFlag === "true";
+const cloudinaryEnabled =
+  cloudinaryRequested &&
+  Boolean(process.env.CLOUDINARY_CLOUD_NAME) &&
+  Boolean(process.env.CLOUDINARY_API_KEY) &&
+  Boolean(process.env.CLOUDINARY_API_SECRET);
+
+const s3Requested =
+  !cloudinaryRequested &&
+  (useS3Flag === "true" ||
+    (!useS3Flag && process.env.NODE_ENV === "production"));
+
+const s3Enabled = s3Requested && Boolean(BUCKET_NAME);
 
 /* --------------------------------------------------
    FILE FILTER (AUTO-DETECT BY MIME TYPE)
 -------------------------------------------------- */
 const fileFilter = (req, file, cb) => {
   const allowedMimeTypes = [
-    // Images
     "image/jpeg",
     "image/png",
     "image/webp",
-
-    // Documents
     "application/pdf",
     "application/msword",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "text/plain",
-
-    // Import files (CSV / Excel)
     "text/csv",
     "application/vnd.ms-excel",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-
-    // Videos
     "video/mp4",
     "video/quicktime",
   ];
@@ -49,9 +56,6 @@ const fileFilter = (req, file, cb) => {
 const getFolder = (req, file) => {
   if (req.body?.folder) return req.body.folder;
 
-  const userId = req.user?.id || "anonymous";
-
-  // Decide folder by MIME type
   if (file.mimetype.startsWith("image/")) return "images";
   if (file.mimetype.startsWith("video/")) return "videos";
 
@@ -64,6 +68,108 @@ const getFolder = (req, file) => {
   }
 
   return "documents";
+};
+
+/* --------------------------------------------------
+   CLOUDINARY HELPERS
+-------------------------------------------------- */
+const buildCloudinarySignature = (params) => {
+  const sorted = Object.entries(params)
+    .filter(([, value]) => value !== undefined && value !== null && value !== "")
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => `${key}=${value}`)
+    .join("&");
+
+  return crypto
+    .createHash("sha1")
+    .update(`${sorted}${process.env.CLOUDINARY_API_SECRET}`)
+    .digest("hex");
+};
+
+const uploadFileToCloudinary = async (req, file) => {
+  const folder = getFolder(req, file);
+  const timestamp = Math.floor(Date.now() / 1000);
+  const publicId = `${Date.now()}-${uuidv4()}`;
+  const signature = buildCloudinarySignature({
+    folder,
+    public_id: publicId,
+    timestamp,
+  });
+
+  const formData = new FormData();
+  const blob = new Blob([file.buffer], { type: file.mimetype });
+
+  formData.append("file", blob, file.originalname);
+  formData.append("api_key", process.env.CLOUDINARY_API_KEY);
+  formData.append("timestamp", String(timestamp));
+  formData.append("folder", folder);
+  formData.append("public_id", publicId);
+  formData.append("signature", signature);
+
+  const response = await fetch(
+    `https://api.cloudinary.com/v1_1/${process.env.CLOUDINARY_CLOUD_NAME}/auto/upload`,
+    {
+      method: "POST",
+      body: formData,
+    }
+  );
+
+  const payload = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      payload?.error?.message || "Cloudinary upload failed"
+    );
+  }
+
+  return {
+    ...file,
+    key: payload.public_id,
+    filename: payload.public_id,
+    path: payload.secure_url,
+    location: payload.secure_url,
+    secure_url: payload.secure_url,
+    size: payload.bytes ?? file.size,
+    mimetype: file.mimetype,
+  };
+};
+
+const mapUploadedFiles = async (req) => {
+  if (req.file?.buffer) {
+    req.file = await uploadFileToCloudinary(req, req.file);
+    return;
+  }
+
+  if (Array.isArray(req.files)) {
+    req.files = await Promise.all(
+      req.files.map((file) => uploadFileToCloudinary(req, file))
+    );
+    return;
+  }
+
+  if (req.files && typeof req.files === "object") {
+    const entries = await Promise.all(
+      Object.entries(req.files).map(async ([field, files]) => [
+        field,
+        await Promise.all(files.map((file) => uploadFileToCloudinary(req, file))),
+      ])
+    );
+    req.files = Object.fromEntries(entries);
+  }
+};
+
+const wrapCloudinaryUpload = (middleware) => (req, res, next) => {
+  middleware(req, res, async (error) => {
+    if (error) return next(error);
+    if (!cloudinaryEnabled) return next();
+
+    try {
+      await mapUploadedFiles(req);
+      return next();
+    } catch (uploadError) {
+      return next(uploadError);
+    }
+  });
 };
 
 /* --------------------------------------------------
@@ -95,8 +201,7 @@ const s3Storage = s3Enabled
 /* --------------------------------------------------
    LOCAL STORAGE (DEV / FALLBACK)
 -------------------------------------------------- */
-const localUploadRoot =
-  process.env.LOCAL_UPLOAD_PATH || "./public/uploads";
+const localUploadRoot = process.env.LOCAL_UPLOAD_PATH || "./public/uploads";
 
 if (!fs.existsSync(localUploadRoot)) {
   fs.mkdirSync(localUploadRoot, { recursive: true });
@@ -123,25 +228,43 @@ const localStorage = multer.diskStorage({
 /* --------------------------------------------------
    STORAGE SELECTOR
 -------------------------------------------------- */
-if (!s3Enabled && (process.env.USE_S3 === "true" || process.env.NODE_ENV === "production")) {
+if (cloudinaryRequested && !cloudinaryEnabled) {
+  console.warn(
+    "Cloudinary upload storage was requested but Cloudinary credentials are incomplete. Falling back to local storage."
+  );
+}
+
+if (!s3Enabled && s3Requested) {
   console.warn(
     "S3 upload storage was requested but AWS_BUCKET_NAME is missing. Falling back to local storage."
   );
 }
 
-const storage = s3Enabled ? s3Storage : localStorage;
+const selectedStorage = cloudinaryEnabled
+  ? multer.memoryStorage()
+  : s3Enabled
+    ? s3Storage
+    : localStorage;
 
-/* --------------------------------------------------
-   MULTER INSTANCE
--------------------------------------------------- */
-export const upload = multer({
-  storage,
+const multerInstance = multer({
+  storage: selectedStorage,
   fileFilter,
   limits: {
-    fileSize: 50 * 1024 * 1024, // 50 MB
+    fileSize: 50 * 1024 * 1024,
     files: 10,
   },
 });
+
+export const upload = {
+  single: (fieldName) =>
+    wrapCloudinaryUpload(multerInstance.single(fieldName)),
+  array: (fieldName, maxCount) =>
+    wrapCloudinaryUpload(multerInstance.array(fieldName, maxCount)),
+  fields: (fieldsConfig) =>
+    wrapCloudinaryUpload(multerInstance.fields(fieldsConfig)),
+  none: () => multerInstance.none(),
+  any: () => wrapCloudinaryUpload(multerInstance.any()),
+};
 
 /* --------------------------------------------------
    STANDARD UPLOAD RESPONSE HANDLER
@@ -156,9 +279,16 @@ export const handleUploadResponse = (req, res) => {
     });
   }
 
-  const response = files.map((file) => ({
+  const normalizedFiles = Array.isArray(files)
+    ? files
+    : Object.values(files).flat();
+
+  const response = normalizedFiles.map((file) => ({
     key: file.key || file.filename,
-    url: file.location || generateFullUrl(file.filename),
+    url:
+      file.location ||
+      file.secure_url ||
+      generateFullUrl(file.filename),
     size: file.size,
     mimetype: file.mimetype,
     originalName: file.originalname,
