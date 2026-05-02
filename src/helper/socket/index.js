@@ -14,7 +14,7 @@ export const initializeSocket = (server) => {
     cors: {
       origin:
         process.env.CLIENT_URL ||
-        "https://vanurtech-solar-frontend.vercel.app",
+        "https://360-solar.netlify.app",
       methods: ["GET", "POST", "PUT", "DELETE"],
       credentials: true,
       allowedHeaders: ["Authorization", "Content-Type"],
