@@ -7,9 +7,14 @@ export const generateFullUrl = (filename) => {
     ? filename.slice(1)
     : filename;
 
+  const fallbackBaseUrl =
+    process.env.NODE_ENV === "production"
+      ? "http://localhost:9001"
+      : "http://localhost:9001";
+
   const baseUrl =
     process.env.BASE_URL?.replace(/\/$/, "") ||
-    "https://backend.sunergytechsolar.com";
+    fallbackBaseUrl;
 
   return `${baseUrl}/public/${cleanFilename}`;
 };

@@ -49,8 +49,17 @@ const getPreviousVisit = async (userId, excludeVisitId = null) => {
 const resolveFileUrl = (file) => {
   if (!file) return null;
   if (file.location) return file.location;
+  if (file.path) {
+    const fallbackBaseUrl =
+      process.env.NODE_ENV === "production"
+        ? "http://localhost:9001"
+        : "http://localhost:9001";
+    const baseUrl =
+      process.env.BASE_URL?.replace(/\/$/, "") || fallbackBaseUrl;
+    const cleanPath = file.path.replace(/^[\\/]+/, "").replace(/\\/g, "/");
+    return `${baseUrl}/${cleanPath}`;
+  }
   if (file.filename) return generateFullUrl(file.filename);
-  if (file.path) return `${process.env.BASE_URL || 'http://localhost:5000'}/${file.path}`;
   return null;
 };
 

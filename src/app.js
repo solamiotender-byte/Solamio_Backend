@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import path from "path";
+import fs from "fs";
 import compression from "compression";
 import mongoSanitize from "express-mongo-sanitize";
 import xss from "xss-clean";
@@ -83,10 +84,41 @@ app.get("/health", (req, res) => {
 
 // ==================== STATIC ====================
 const __dirname = path.resolve();
+const publicDir = path.join(__dirname, "public");
+
+app.get("/public/:filename", (req, res, next) => {
+  const rawFilename = req.params.filename;
+  const filename = path.basename(rawFilename || "");
+
+  if (!filename || filename !== rawFilename) {
+    return next();
+  }
+
+  const directFile = path.join(publicDir, filename);
+  if (fs.existsSync(directFile)) {
+    return res.sendFile(directFile);
+  }
+
+  const fallbackFolders = [
+    path.join(publicDir, "uploads", "images"),
+    path.join(publicDir, "uploads", "videos"),
+    path.join(publicDir, "uploads", "documents"),
+    path.join(publicDir, "uploads", "lead-imports"),
+  ];
+
+  for (const folder of fallbackFolders) {
+    const candidate = path.join(folder, filename);
+    if (fs.existsSync(candidate)) {
+      return res.sendFile(candidate);
+    }
+  }
+
+  return next();
+});
 
 app.use(
   "/public",
-  express.static(path.join(__dirname, "public"), {
+  express.static(publicDir, {
     maxAge: "1y",
   })
 );
