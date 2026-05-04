@@ -134,6 +134,55 @@ const uploadFileToCloudinary = async (req, file) => {
   };
 };
 
+const persistFileLocally = async (req, file) => {
+  const folder = getFolder(req, file);
+  const ext = path.extname(file.originalname) || "";
+  const filename = `${Date.now()}-${uuidv4()}${ext}`;
+  const fullDirectory = path.join(localUploadRoot, folder);
+  const fullPath = path.join(fullDirectory, filename);
+
+  if (!fs.existsSync(fullDirectory)) {
+    fs.mkdirSync(fullDirectory, { recursive: true });
+  }
+
+  await fs.promises.writeFile(fullPath, file.buffer);
+
+  const normalizedPath = fullPath.replace(/\\/g, "/");
+  const publicPath = normalizedPath.includes("/public/")
+    ? normalizedPath.slice(normalizedPath.indexOf("/public/") + 1)
+    : normalizedPath;
+
+  return {
+    ...file,
+    filename,
+    path: publicPath,
+    destination: fullDirectory,
+    size: file.buffer?.length ?? file.size,
+  };
+};
+
+const fallbackUploadedFilesToLocal = async (req) => {
+  if (req.file?.buffer) {
+    req.file = await persistFileLocally(req, req.file);
+    return;
+  }
+
+  if (Array.isArray(req.files)) {
+    req.files = await Promise.all(req.files.map((file) => persistFileLocally(req, file)));
+    return;
+  }
+
+  if (req.files && typeof req.files === "object") {
+    const entries = await Promise.all(
+      Object.entries(req.files).map(async ([field, files]) => [
+        field,
+        await Promise.all(files.map((file) => persistFileLocally(req, file))),
+      ])
+    );
+    req.files = Object.fromEntries(entries);
+  }
+};
+
 const mapUploadedFiles = async (req) => {
   if (req.file?.buffer) {
     req.file = await uploadFileToCloudinary(req, req.file);
@@ -167,7 +216,16 @@ const wrapCloudinaryUpload = (middleware) => (req, res, next) => {
       await mapUploadedFiles(req);
       return next();
     } catch (uploadError) {
-      return next(uploadError);
+      console.warn(
+        `Cloudinary upload failed, falling back to local storage: ${uploadError.message}`
+      );
+
+      try {
+        await fallbackUploadedFilesToLocal(req);
+        return next();
+      } catch (localFallbackError) {
+        return next(localFallbackError);
+      }
     }
   });
 };

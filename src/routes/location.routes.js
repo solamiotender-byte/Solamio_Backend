@@ -49,6 +49,43 @@ router.get(
   getTotalDistanceController
 );
 
+router.get(
+  "/route-distance",
+  allowRoles(["Head_office", "ZSM", "ASM", "TEAM"]),
+  async (req, res, next) => {
+    try {
+      const { originLat, originLng, destLat, destLng } = req.query;
+      if (!originLat || !originLng || !destLat || !destLng) {
+        return res.status(400).json({ error: "Missing coordinates" });
+      }
+
+      const key = process.env.GOOGLE_MAPS_API_KEY;
+      const url =
+        `https://maps.googleapis.com/maps/api/directions/json` +
+        `?origin=${originLat},${originLng}` +
+        `&destination=${destLat},${destLng}` +
+        `&mode=driving&key=${key}`;
+
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (data.status === "OK") {
+        const leg = data.routes[0].legs[0];
+        return res.json({
+          distanceKm: leg.distance.value / 1000,
+          distanceText: leg.distance.text,
+          durationMinutes: Math.round(leg.duration.value / 60),
+          durationText: leg.duration.text,
+        });
+      }
+
+      return res.status(400).json({ error: data.status || "Directions API failed" });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 // DELETE /location/expired — manual cleanup trigger (optional, TTL handles it)
 router.delete(
   "/expired",

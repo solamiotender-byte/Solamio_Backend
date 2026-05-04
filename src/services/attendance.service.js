@@ -13,6 +13,7 @@ import {
 
 const MIN_MOVEMENT_KM = 0.005;
 const MAX_REASONABLE_JUMP_KM = 5;
+const MAX_REASONABLE_SPEED_KMH = 120;
 
 const haversineKm = (lat1, lng1, lat2, lng2) => {
   const R = 6371;
@@ -24,6 +25,36 @@ const haversineKm = (lat1, lng1, lat2, lng2) => {
       Math.cos((lat2 * Math.PI) / 180) *
       Math.sin(dLng / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
+const getValidDistanceKm = (previousPoint, nextPoint) => {
+  if (!previousPoint) return 0;
+
+  const dist = haversineKm(previousPoint.lat, previousPoint.lng, nextPoint.lat, nextPoint.lng);
+  if (dist < MIN_MOVEMENT_KM) return 0;
+
+  const previousRecordedAt = previousPoint.recordedAt ? new Date(previousPoint.recordedAt) : null;
+  const nextRecordedAt = nextPoint.recordedAt ? new Date(nextPoint.recordedAt) : null;
+
+  if (
+    !previousRecordedAt ||
+    !nextRecordedAt ||
+    Number.isNaN(previousRecordedAt.getTime()) ||
+    Number.isNaN(nextRecordedAt.getTime())
+  ) {
+    return dist <= MAX_REASONABLE_JUMP_KM ? dist : 0;
+  }
+
+  const elapsedHours = Math.max(
+    (nextRecordedAt.getTime() - previousRecordedAt.getTime()) / (60 * 60 * 1000),
+    0
+  );
+  const maxReasonableDistance = Math.max(
+    MAX_REASONABLE_JUMP_KM,
+    elapsedHours * MAX_REASONABLE_SPEED_KMH
+  );
+
+  return dist <= maxReasonableDistance ? dist : 0;
 };
 
 const storeAttendanceLocationPoint = async ({
@@ -49,10 +80,11 @@ const storeAttendanceLocationPoint = async ({
 
   let distanceFromPrevious = 0;
   if (lastPoint) {
-    const dist = haversineKm(lastPoint.lat, lastPoint.lng, lat, lng);
-    if (dist >= MIN_MOVEMENT_KM && dist <= MAX_REASONABLE_JUMP_KM) {
-      distanceFromPrevious = dist;
-    }
+    distanceFromPrevious = getValidDistanceKm(lastPoint, {
+      lat,
+      lng,
+      recordedAt,
+    });
   }
 
   await LocationPoint.create({

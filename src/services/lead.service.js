@@ -4,6 +4,7 @@ import path from "path";
 import csvParser from "csv-parser";
 import * as XLSX from "xlsx";
 import Lead from "../models/lead.model.js";
+import Visit from "../models/visit.model.js";
 import User from "../models/user.model.js";
 import { AppError, NotFoundError } from "../errors/customError.js";
 import { Parser } from "json2csv";

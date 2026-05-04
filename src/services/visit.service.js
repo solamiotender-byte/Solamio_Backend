@@ -108,7 +108,7 @@ const createLeadFromVisit = async (visit, data,currentUser, session) => {
    ── Handles isLeadCreated = 'yes' | 'no' | 'other'
    ── For 'other': saves description in visit.remarks, no lead
    ── For 'yes':   saves visit + creates lead
-   ── For 'no':    saves visit only
+   ── For 'no':    saves visit + creates lead
 ========================================================= */
 export const createVisitService = async (data, currentUser, files = []) => {
   const session = await mongoose.startSession();
@@ -205,8 +205,11 @@ export const createVisitService = async (data, currentUser, files = []) => {
       'no'
     ).toString().toLowerCase().trim();
 
-    // isLeadCreate (boolean) is true only when explicitly 'yes'
-    const isLeadCreate = isLeadCreatedValue === 'yes' || isLeadCreatedValue === 'true';
+    // Create a lead for both "yes" and "no". "other" remains visit-only.
+    const isLeadCreate =
+      isLeadCreatedValue === 'yes' ||
+      isLeadCreatedValue === 'no' ||
+      isLeadCreatedValue === 'true';
 
     // ── Resolve description/remarks from any field name ───────────────────
     // Frontend sends remarks, description, or visitNotes — accept all three
@@ -262,14 +265,16 @@ if (data.address)       visitData.address       = data.address;
     // Create the visit
     const [visit] = await Visit.create([visitData], { session });
 
-    // Create lead only for 'yes' — NOT for 'other'
+    // Create lead for "yes" and "no" — NOT for "other"
     let createdLead = null;
+    let leadCreationError = null;
     if (isLeadCreate) {
       try {
       createdLead = await createLeadFromVisit(visit, data, currentUser, session);
       
       } catch (leadError) {
         console.error("Failed to create lead:", leadError);
+        leadCreationError = leadError.message || "Failed to create lead from visit";
         visit.remarks = (visit.remarks || "") + " [Lead creation failed: " + leadError.message + "]";
         await visit.save({ session });
       }
@@ -313,6 +318,7 @@ if (data.address)       visitData.address       = data.address;
       success: true,
       visit:   populatedVisit,
       lead:    createdLead,
+      leadCreationError,
       message: createdLead
         ? "Visit and lead created successfully"
         : isLeadCreatedValue === 'other'

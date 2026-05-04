@@ -24,6 +24,37 @@ function haversineKm(lat1, lng1, lat2, lng2) {
 
 const MIN_MOVEMENT_KM = 0.005;
 const MAX_REASONABLE_JUMP_KM = 5;
+const MAX_REASONABLE_SPEED_KMH = 120;
+
+const getValidDistanceKm = (previousPoint, nextPoint) => {
+  if (!previousPoint) return 0;
+
+  const dist = haversineKm(previousPoint.lat, previousPoint.lng, nextPoint.lat, nextPoint.lng);
+  if (dist < MIN_MOVEMENT_KM) return 0;
+
+  const previousRecordedAt = previousPoint.recordedAt ? new Date(previousPoint.recordedAt) : null;
+  const nextRecordedAt = nextPoint.recordedAt ? new Date(nextPoint.recordedAt) : null;
+
+  if (
+    !previousRecordedAt ||
+    !nextRecordedAt ||
+    Number.isNaN(previousRecordedAt.getTime()) ||
+    Number.isNaN(nextRecordedAt.getTime())
+  ) {
+    return dist <= MAX_REASONABLE_JUMP_KM ? dist : 0;
+  }
+
+  const elapsedHours = Math.max(
+    (nextRecordedAt.getTime() - previousRecordedAt.getTime()) / (60 * 60 * 1000),
+    0
+  );
+  const maxReasonableDistance = Math.max(
+    MAX_REASONABLE_JUMP_KM,
+    elapsedHours * MAX_REASONABLE_SPEED_KMH
+  );
+
+  return dist <= maxReasonableDistance ? dist : 0;
+};
 
 // ─── Create single Location Point ────────────────────────────────────────────
 export const createLocationPointService = async (data, currentUser) => {
@@ -41,10 +72,11 @@ export const createLocationPointService = async (data, currentUser) => {
 
     let distanceFromPrevious = 0;
     if (lastPoint) {
-      const dist = haversineKm(lastPoint.lat, lastPoint.lng, data.lat, data.lng);
-      if (dist >= MIN_MOVEMENT_KM && dist <= MAX_REASONABLE_JUMP_KM) {
-        distanceFromPrevious = dist;
-      }
+      distanceFromPrevious = getValidDistanceKm(lastPoint, {
+        lat: data.lat,
+        lng: data.lng,
+        recordedAt,
+      });
     }
 
     const locationPoint = await LocationPoint.create({
@@ -214,8 +246,13 @@ export const bulkCreateLocationPointsService = async (points, currentUser) => {
       { sort: { recordedAt: -1 } }
     );
 
-    let prevLat = lastSaved?.lat ?? null;
-    let prevLng = lastSaved?.lng ?? null;
+    let prevPoint = lastSaved
+      ? {
+          lat: lastSaved.lat,
+          lng: lastSaved.lng,
+          recordedAt: lastSaved.recordedAt,
+        }
+      : null;
 
     const pointsWithMetadata = sorted.map((point) => {
       const recordedAt = point.time ? new Date(point.time) : new Date();
@@ -223,15 +260,19 @@ export const bulkCreateLocationPointsService = async (points, currentUser) => {
 
       // Calculate distance from previous point
       let distanceFromPrevious = 0;
-      if (prevLat !== null && prevLng !== null) {
-        const dist = haversineKm(prevLat, prevLng, point.lat, point.lng);
-        if (dist >= MIN_MOVEMENT_KM && dist <= MAX_REASONABLE_JUMP_KM) {
-          distanceFromPrevious = dist;
-        }
+      if (prevPoint) {
+        distanceFromPrevious = getValidDistanceKm(prevPoint, {
+          lat: point.lat,
+          lng: point.lng,
+          recordedAt,
+        });
       }
 
-      prevLat = point.lat;
-      prevLng = point.lng;
+      prevPoint = {
+        lat: point.lat,
+        lng: point.lng,
+        recordedAt,
+      };
 
       return {
         ...point,
