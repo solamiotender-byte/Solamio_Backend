@@ -121,7 +121,16 @@ export const getLeadVisibilityFilter = async (currentUser) => {
 // Stage-specific field validators
 const getStageFields = (stage) => {
   const stageFields = {
-  Visit: ["visitStatus", "visitDate", "visitTime", "visitLocation", "visitNotes"],
+  Visit: [
+    "visitStatus",
+    "visitDate",
+    "visitTime",
+    "visitLocation",
+    "visitNotes",
+    "followUpAction",
+    "followUpNotes",
+    "followUpDate",
+  ],
     Registration: [
       "address",
       "city",
@@ -584,6 +593,11 @@ export const updateLeadService = async (id, data, userId) => {
     }
 
     const prevStatus = lead.status;
+    const previousFollowUpKey = [
+      lead.visitStatus,
+      lead.followUpAction,
+      lead.followUpDate ? lead.followUpDate.toISOString() : "",
+    ].join("|");
     let statusChanged = false;
     const updatedFields = {};
 
@@ -626,6 +640,16 @@ export const updateLeadService = async (id, data, userId) => {
     =============================== */
     if (Object.keys(updatedFields).length > 0 || statusChanged) {
       lead.lastContactedAt = new Date();
+    }
+
+    const nextFollowUpKey = [
+      lead.visitStatus,
+      lead.followUpAction,
+      lead.followUpDate ? lead.followUpDate.toISOString() : "",
+    ].join("|");
+
+    if (previousFollowUpKey !== nextFollowUpKey) {
+      lead.followUpNotificationSentAt = null;
     }
 
     await lead.save();

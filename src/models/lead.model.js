@@ -20,13 +20,21 @@
       /* 🔹 Visit */
       visitStatus: {
         type: String,
-        enum: ["Scheduled", "Completed", "Cancelled", "Not Assigned"],
+        enum: ["Scheduled", "Completed", "Cancelled", "Not Assigned", "Follow Up"],
         default: "Not Assigned",
       },
       visitDate: { type: Date, default: null },
       visitTime: { type: String, default: null },
       visitLocation: { type: String, default: null },
       visitNotes: { type: String, default: null },
+      followUpAction: {
+        type: String,
+        enum: ["Call", "Message", "Note", ""],
+        default: "",
+      },
+      followUpNotes: { type: String, default: "" },
+      followUpDate: { type: Date, default: null },
+      followUpNotificationSentAt: { type: Date, default: null },
 
       /* 🔹 Registration */
       address: { type: String, default: null },
@@ -216,6 +224,12 @@
   LeadSchema.index({ loanStatus: 1 });
   LeadSchema.index({ disbursementStatus: 1 });
   LeadSchema.index({ createdAt: -1 });
+  LeadSchema.index({
+    visitStatus: 1,
+    followUpDate: 1,
+    followUpNotificationSentAt: 1,
+    assignedUser: 1,
+  });
 
   const Lead = mongoose.model("Lead", LeadSchema);
   export default Lead;

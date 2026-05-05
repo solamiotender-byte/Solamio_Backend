@@ -18,6 +18,7 @@ import {
   startDailyCopy,
   startRestoreCron,
 } from "./cron/dbBackup.cron.js";
+import { startFollowUpNotificationCron } from "./cron/followUpNotification.cron.js";
 
 const app = express();
 
@@ -25,6 +26,7 @@ const app = express();
 startHourlyBackup();
 startRestoreCron();
 startDailyCopy();
+startFollowUpNotificationCron();
 
 // ==================== CORS ====================
 const allowedOrigins = [

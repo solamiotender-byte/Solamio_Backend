@@ -87,6 +87,13 @@ const userSchema = new mongoose.Schema(
     },
     token: { type: String, default: null },
     refreshToken: { type: String, default: null },
+    fcmTokens: [
+      {
+        token: { type: String, required: true },
+        platform: { type: String, default: "android" },
+        updatedAt: { type: Date, default: Date.now },
+      },
+    ],
     lastLoginDate: { type: Date, default: null },
     resetPasswordToken: { type: String, default: null },
     resetPasswordExpire: { type: Date, default: null },
