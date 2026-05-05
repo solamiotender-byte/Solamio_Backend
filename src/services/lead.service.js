@@ -1265,8 +1265,36 @@ export const getLeadFunnelService = async (userId) => {
       },
     ]);
 
+    const assigneeIds = [
+      ...new Set(
+        aggregation
+          .flatMap((stage) => stage.leads || [])
+          .flatMap((lead) => [lead.assignedUser, lead.assignedManager])
+          .filter(Boolean)
+          .map((id) => id.toString())
+      ),
+    ];
+    const assignees = await User.find({ _id: { $in: assigneeIds } })
+      .select("firstName lastName role")
+      .lean();
+    const assigneeMap = assignees.reduce((acc, user) => {
+      acc[user._id.toString()] = user;
+      return acc;
+    }, {});
+
     const funnelMap = aggregation.reduce((acc, stage) => {
-      acc[stage._id] = { count: stage.count, leads: stage.leads };
+      acc[stage._id] = {
+        count: stage.count,
+        leads: (stage.leads || []).map((lead) => ({
+          ...lead,
+          assignedUser: lead.assignedUser
+            ? assigneeMap[lead.assignedUser.toString()] || lead.assignedUser
+            : null,
+          assignedManager: lead.assignedManager
+            ? assigneeMap[lead.assignedManager.toString()] || lead.assignedManager
+            : null,
+        })),
+      };
       return acc;
     }, {});
 
@@ -2050,6 +2078,8 @@ export const getBankLoanSummaryService = async (query = {}, userId) => {
   });
 
   const loans = await Lead.find(filter)
+    .populate("assignedUser", "firstName lastName role")
+    .populate("assignedManager", "firstName lastName role")
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(limit)
@@ -2094,6 +2124,8 @@ export const getDisbursementSummaryService = async (query = {}, userId) => {
   });
 
   const disbursements = await Lead.find(filter)
+    .populate("assignedUser", "firstName lastName role")
+    .populate("assignedManager", "firstName lastName role")
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(limit)
@@ -2139,6 +2171,8 @@ export const getInstallationSummaryService = async (query = {}, userId) => {
   });
 
   const installations = await Lead.find(filter)
+    .populate("assignedUser", "firstName lastName role")
+    .populate("assignedManager", "firstName lastName role")
     .sort({ installationDate: -1 })
     .skip(skip)
     .limit(limit)
@@ -2200,6 +2234,8 @@ export const getDocumentSummaryService = async (query = {}, userId) => {
   });
 
   const documents = await Lead.find(filter)
+    .populate("assignedUser", "firstName lastName role")
+    .populate("assignedManager", "firstName lastName role")
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(limit)
@@ -2257,8 +2293,8 @@ export const getBankAtPendingSummaryService = async (query = {}, userId) => {
        DATA FETCH
     =============================== */
     const leads = await Lead.find(filter)
-      .populate("assignedUser", "firstName lastName")
-      .populate("assignedManager", "firstName lastName")
+      .populate("assignedUser", "firstName lastName role")
+      .populate("assignedManager", "firstName lastName role")
       .sort({ bankAtPendingDate: -1 })
       .skip(skip)
       .limit(Number(limit))
