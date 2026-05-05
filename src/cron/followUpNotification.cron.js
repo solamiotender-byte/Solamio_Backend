@@ -1,5 +1,5 @@
 import cron from "node-cron";
-import admin from "../config/firebase.config.js";
+import admin, { isFirebaseReady } from "../config/firebase.config.js";
 import Lead from "../models/lead.model.js";
 import User from "../models/user.model.js";
 
@@ -21,6 +21,8 @@ const markSent = async (leadId) => {
 };
 
 export const sendDueFollowUpNotifications = async () => {
+  if (!isFirebaseReady()) return;
+
   const now = new Date();
   const leads = await Lead.find({
     isDeleted: false,

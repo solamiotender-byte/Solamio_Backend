@@ -20,6 +20,7 @@ import { generateFullUrl } from '../utils/generateFullUrl.js'
 import s3Client from "../config/aws.js";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { getHeadOfficeScopedUserIds } from "../utils/headOfficeScope.js";
+import admin, { isFirebaseReady } from "../config/firebase.config.js";
 
 
 /* -------------------------------------------------- */
@@ -36,6 +37,59 @@ const resolveFileUrl = (file) => {
 const handleError = (err, defaultMsg = "Lead service error") => {
   if (err instanceof AppError || err instanceof NotFoundError) throw err;
   throw new AppError(err.message || defaultMsg, err.statusCode || 500);
+};
+
+const buildLeadName = (lead) =>
+  [lead.firstName, lead.lastName].filter(Boolean).join(" ").trim() || "customer";
+
+const sendLeadAssignedNotification = async (assignedUserId, lead) => {
+  if (!assignedUserId || !lead) return;
+  if (!isFirebaseReady()) return;
+
+  try {
+    const user = await User.findById(assignedUserId).select("fcmTokens").lean();
+    const tokens = [...new Set((user?.fcmTokens || []).map((item) => item.token).filter(Boolean))];
+    if (!tokens.length) return;
+
+    const response = await admin.messaging().sendEachForMulticast({
+      tokens,
+      notification: {
+        title: "New lead assigned",
+        body: `You have a new lead: ${buildLeadName(lead)}`,
+      },
+      data: {
+        type: "lead_assigned",
+        leadId: String(lead._id),
+      },
+      android: {
+        priority: "high",
+        notification: {
+          channelId: "general",
+          sound: "default",
+        },
+      },
+    });
+
+    const invalidTokens = [];
+    response.responses.forEach((item, index) => {
+      const code = item.error?.code || "";
+      if (
+        code.includes("registration-token-not-registered") ||
+        code.includes("invalid-registration-token")
+      ) {
+        invalidTokens.push(tokens[index]);
+      }
+    });
+
+    if (invalidTokens.length) {
+      await User.updateOne(
+        { _id: assignedUserId },
+        { $pull: { fcmTokens: { token: { $in: invalidTokens } } } }
+      );
+    }
+  } catch (error) {
+    console.error("Lead assigned notification failed:", error.message);
+  }
 };
 
 // Get role-based lead visibility filter (FINAL VERSION)
@@ -734,6 +788,7 @@ export const assignLeadService = async (
     }
 
     let update = {};
+    let notifyAssignedUserId = null;
 
     /* 🔹 Assign to Manager (ZSM / ASM) */
     if (managerId) {
@@ -763,12 +818,15 @@ export const assignLeadService = async (
       }
 
       update.assignedUser = userId;
+      notifyAssignedUserId = userId;
       lead.status = "Visit";
       update.assignedManager = teamUser.supervisor;
     }
 
     Object.assign(lead, update);
     await lead.save();
+
+    await sendLeadAssignedNotification(notifyAssignedUserId, lead);
 
     return await Lead.findById(leadId).populate(
       "assignedManager assignedUser",
@@ -805,6 +863,8 @@ export const bulkAssignLeadsService = async (
     });
 
     for (const lead of leads) {
+      let notifyAssignedUserId = null;
+
       if (targetRole === "TEAM") {
         // ASM can assign TEAM only under them
         if (
@@ -817,6 +877,7 @@ export const bulkAssignLeadsService = async (
           );
 
         lead.assignedUser = targetId;
+        notifyAssignedUserId = targetId;
         lead.assignedManager = targetUser.supervisor;
         lead.status = "Visit";
       } else {
@@ -829,6 +890,7 @@ export const bulkAssignLeadsService = async (
       }
 
       await lead.save();
+      await sendLeadAssignedNotification(notifyAssignedUserId, lead);
     }
 
     return {
