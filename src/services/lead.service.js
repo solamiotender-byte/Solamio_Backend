@@ -2008,6 +2008,8 @@ export const getRegistrationSummaryService = async (query = {}, userId) => {
   });
 
   const registrations = await Lead.find(filter)
+    .populate("assignedUser", "firstName lastName role")
+    .populate("assignedManager", "firstName lastName role")
     .sort({ dateOfRegistration: -1 })
     .skip(skip)
     .limit(limit)
