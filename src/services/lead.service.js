@@ -44,12 +44,18 @@ const buildLeadName = (lead) =>
 
 const sendLeadAssignedNotification = async (assignedUserId, lead) => {
   if (!assignedUserId || !lead) return;
-  if (!isFirebaseReady()) return;
+  if (!isFirebaseReady()) {
+    console.warn("[LeadAssignedNotification] Firebase is not ready");
+    return;
+  }
 
   try {
     const user = await User.findById(assignedUserId).select("fcmTokens").lean();
     const tokens = [...new Set((user?.fcmTokens || []).map((item) => item.token).filter(Boolean))];
-    if (!tokens.length) return;
+    if (!tokens.length) {
+      console.warn(`[LeadAssignedNotification] No device token for user=${assignedUserId}`);
+      return;
+    }
 
     const response = await admin.messaging().sendEachForMulticast({
       tokens,
@@ -87,6 +93,10 @@ const sendLeadAssignedNotification = async (assignedUserId, lead) => {
         { $pull: { fcmTokens: { token: { $in: invalidTokens } } } }
       );
     }
+
+    console.log(
+      `[LeadAssignedNotification] lead=${lead._id} user=${assignedUserId} success=${response.successCount} failed=${response.failureCount}`,
+    );
   } catch (error) {
     console.error("Lead assigned notification failed:", error.message);
   }
@@ -415,6 +425,7 @@ if (data.assignedTo && !leadData.assignedUser) {
 
     const lead = new Lead(leadData);
     await lead.save();
+    await sendLeadAssignedNotification(lead.assignedUser, lead);
 
     return await Lead.findById(lead._id)
       .populate("assignedManager", "firstName lastName email role")
@@ -647,6 +658,7 @@ export const updateLeadService = async (id, data, userId) => {
     }
 
     const prevStatus = lead.status;
+    const previousAssignedUser = lead.assignedUser ? String(lead.assignedUser) : "";
     const previousFollowUpKey = [
       lead.visitStatus,
       lead.followUpAction,
@@ -707,6 +719,10 @@ export const updateLeadService = async (id, data, userId) => {
     }
 
     await lead.save();
+    const nextAssignedUser = lead.assignedUser ? String(lead.assignedUser) : "";
+    if (nextAssignedUser && nextAssignedUser !== previousAssignedUser) {
+      await sendLeadAssignedNotification(nextAssignedUser, lead);
+    }
 
     /* ===============================
        4️⃣ RETURN UPDATED LEAD
