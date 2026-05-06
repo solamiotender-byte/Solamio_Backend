@@ -65,7 +65,7 @@ const sendLeaveStatusNotification = async (leave, status) => {
   const title = status === "approved" ? "Leave approved" : "Leave rejected";
   const body = `${formatDate(leave.startDate)} to ${formatDate(leave.endDate)}: ${status}`;
 
-  await admin.messaging().sendEachForMulticast({
+  const response = await admin.messaging().sendEachForMulticast({
     tokens,
     notification: { title, body },
     data: {
@@ -74,7 +74,36 @@ const sendLeaveStatusNotification = async (leave, status) => {
       status,
       message: body,
     },
+    android: {
+      priority: "high",
+      notification: {
+        channelId: "general",
+        sound: "default",
+      },
+    },
   });
+
+  const invalidTokens = [];
+  response.responses.forEach((item, index) => {
+    const code = item.error?.code || "";
+    if (
+      code === "messaging/registration-token-not-registered" ||
+      code === "messaging/invalid-registration-token"
+    ) {
+      invalidTokens.push(tokens[index]);
+    }
+  });
+
+  if (invalidTokens.length) {
+    await User.updateOne(
+      { _id: leave.user },
+      { $pull: { fcmTokens: { token: { $in: invalidTokens } } } },
+    );
+  }
+
+  console.log(
+    `[LeaveNotification] ${status} leave=${leave._id} user=${leave.user} success=${response.successCount} failed=${response.failureCount}`,
+  );
 };
 
 const getWorkHours = (punchInTime, punchOutTime) => {
