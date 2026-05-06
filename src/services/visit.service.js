@@ -50,14 +50,8 @@ const resolveFileUrl = (file) => {
   if (!file) return null;
   if (file.location) return file.location;
   if (file.path) {
-    const fallbackBaseUrl =
-      process.env.NODE_ENV === "production"
-        ? "http://localhost:9001"
-        : "http://localhost:9001";
-    const baseUrl =
-      process.env.BASE_URL?.replace(/\/$/, "") || fallbackBaseUrl;
     const cleanPath = file.path.replace(/^[\\/]+/, "").replace(/\\/g, "/");
-    return `${baseUrl}/${cleanPath}`;
+    return `/${cleanPath}`;
   }
   if (file.filename) return generateFullUrl(file.filename);
   return null;

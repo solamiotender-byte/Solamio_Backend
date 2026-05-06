@@ -9,6 +9,7 @@ import attendancRouter from "./attendance.routes.js";
 import batteryRouter from "./Battery.route.js";
 import locationRouter from "./location.routes.js";
 import notificationRouter from "./notification.routes.js";
+import leaveRouter from "./leave.routes.js";
 
 const apiV1Router = express.Router();
 
@@ -22,5 +23,6 @@ apiV1Router.use("/attendance", attendancRouter);
 apiV1Router.use("/battery", batteryRouter);
 apiV1Router.use("/location", locationRouter);
 apiV1Router.use("/notifications", notificationRouter);
+apiV1Router.use("/leave", leaveRouter);
 
 export default apiV1Router;
