@@ -11,6 +11,8 @@ import {
   updateAttendance,
   deleteAttendance,
   getAttendanceStats,
+  getAttendanceSetting,
+  updateAttendanceSetting,
 } from '../controllers/attendance.controller.js';
 
 const router = express.Router();
@@ -42,6 +44,20 @@ router.post(
   authenticate,
   allowRoles(adminRoles),
   markHoliday
+);
+
+router.get(
+  '/settings',
+  authenticate,
+  allowRoles(['ASM', 'ZSM', 'Head_office']),
+  getAttendanceSetting
+);
+
+router.put(
+  '/settings',
+  authenticate,
+  allowRoles(adminRoles),
+  updateAttendanceSetting
 );
 
 // ==================== GET ALL ATTENDANCE ====================

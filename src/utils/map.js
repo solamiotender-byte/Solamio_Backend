@@ -23,8 +23,8 @@ import {
 // ─── Config ───────────────────────────────────────────────────────────────────
 const BASE_URL = import.meta.env.VITE_API_URL
   ? `${import.meta.env.VITE_API_URL}/api/v1`
-  : "http://localhost:9001/api/v1";
-const API = import.meta.env.VITE_API_URL || "http://localhost:9001";
+  : "https://solar-backend-6vaa.onrender.com/api/v1";
+const API = import.meta.env.VITE_API_URL || "https://solar-backend-6vaa.onrender.com";
 const GMAPS_KEY =
   import.meta.env.VITE_GOOGLE_MAPS_API_KEY ||
   import.meta.env.REACT_APP_GOOGLE_MAPS_API_KEY || "";

@@ -9,8 +9,8 @@ export const generateFullUrl = (filename) => {
 
   const fallbackBaseUrl =
     process.env.NODE_ENV === "production"
-      ? "http://localhost:9001"
-      : "http://localhost:9001";
+      ? "https://solar-backend-6vaa.onrender.com"
+      : "https://solar-backend-6vaa.onrender.com";
 
   const baseUrl =
     process.env.BASE_URL?.replace(/\/$/, "") ||

@@ -1,5 +1,6 @@
 // services/attendance.service.js
 import Attendance from "../models/attendance.model.js";
+import AttendanceSetting from "../models/attendanceSetting.model.js";
 import User from "../models/user.model.js";
 import LocationPoint from "../models/locationPoint.js";
 import { AppError } from "../errors/customError.js";
@@ -14,6 +15,36 @@ import {
 const MIN_MOVEMENT_KM = 0.005;
 const MAX_REASONABLE_JUMP_KM = 5;
 const MAX_REASONABLE_SPEED_KMH = 120;
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+const getAttendanceSetting = async () => {
+  let setting = await AttendanceSetting.findOne({ key: "default" });
+  if (!setting) setting = await AttendanceSetting.create({ key: "default" });
+  return setting;
+};
+
+const isValidTimeValue = (value) => /^([01]\d|2[0-3]):[0-5]\d$/.test(String(value || ""));
+
+const timeToMinutes = (value) => {
+  const [hours, minutes] = String(value).split(":").map(Number);
+  return hours * 60 + minutes;
+};
+
+const getIstParts = (date) => {
+  const istDate = new Date(date.getTime() + IST_OFFSET_MS);
+  return {
+    year: istDate.getUTCFullYear(),
+    month: istDate.getUTCMonth(),
+    day: istDate.getUTCDate(),
+    minutes: istDate.getUTCHours() * 60 + istDate.getUTCMinutes(),
+  };
+};
+
+const getUtcDateForIstTime = (sourceDate, timeValue) => {
+  const { year, month, day } = getIstParts(sourceDate);
+  const [hours, minutes] = String(timeValue).split(":").map(Number);
+  return new Date(Date.UTC(year, month, day, hours, minutes, 0, 0) - IST_OFFSET_MS);
+};
 
 const haversineKm = (lat1, lng1, lat2, lng2) => {
   const R = 6371;
@@ -114,6 +145,15 @@ export const punchInService = async (data, currentUser, files = []) => {
     const punchInTime = time ? new Date(time) : new Date();
     if (Number.isNaN(punchInTime.getTime())) {
       throw new AppError("Invalid punch-in time", 400);
+    }
+
+    const attendanceSetting = await getAttendanceSetting();
+    if (attendanceSetting.blockEarlyPunchIn) {
+      const punchInMinutes = getIstParts(punchInTime).minutes;
+      const officeStartMinutes = timeToMinutes(attendanceSetting.officePunchInTime);
+      if (punchInMinutes < officeStartMinutes) {
+        throw new AppError(`Punch in is allowed after ${attendanceSetting.officePunchInTime}.`, 400);
+      }
     }
 
     /* ===============================
@@ -480,7 +520,7 @@ export const markHolidayService = async (data, currentUser) => {
 
 
 /* ================= AUTO PUNCH OUT (12 HOURS) ================= */
-export const autoPunchOutService = async () => {
+const autoPunchOutServiceLegacy = async () => {
   try {
     const now = new Date();
     const twelveHoursAgo = new Date(now.getTime() - 12 * 60 * 60 * 1000);
@@ -532,6 +572,92 @@ export const autoPunchOutService = async () => {
 
     console.log(`[AutoPunchOut] Processed ${stalePunchIns.length} record(s)`);
 
+  } catch (error) {
+    console.error("[AutoPunchOut] Error:", error.message);
+  }
+};
+
+
+export const getAttendanceSettingService = async () => {
+  return await getAttendanceSetting();
+};
+
+export const updateAttendanceSettingService = async (data, currentUser) => {
+  if (currentUser.role !== "Head_office") {
+    throw new AppError("Only Head Office can update attendance settings", 403);
+  }
+
+  const updates = {};
+  if (data.officePunchInTime !== undefined) {
+    if (!isValidTimeValue(data.officePunchInTime)) throw new AppError("Invalid punch-in time", 400);
+    updates.officePunchInTime = data.officePunchInTime;
+  }
+  if (data.officePunchOutTime !== undefined) {
+    if (!isValidTimeValue(data.officePunchOutTime)) throw new AppError("Invalid punch-out time", 400);
+    updates.officePunchOutTime = data.officePunchOutTime;
+  }
+  if (data.blockEarlyPunchIn !== undefined) updates.blockEarlyPunchIn = Boolean(data.blockEarlyPunchIn);
+  if (data.autoPunchOutEnabled !== undefined) updates.autoPunchOutEnabled = Boolean(data.autoPunchOutEnabled);
+  updates.updatedBy = currentUser._id;
+
+  return await AttendanceSetting.findOneAndUpdate(
+    { key: "default" },
+    { $set: updates, $setOnInsert: { key: "default" } },
+    { new: true, upsert: true }
+  );
+};
+
+export const autoPunchOutService = async () => {
+  try {
+    const now = new Date();
+    const setting = await getAttendanceSetting();
+    if (!setting.autoPunchOutEnabled) return;
+
+    const officePunchOutTime = setting.officePunchOutTime || "19:00";
+    if (getIstParts(now).minutes < timeToMinutes(officePunchOutTime)) {
+      console.log("[AutoPunchOut] Office punch-out time not reached.");
+      return;
+    }
+
+    const autoPunchOutTime = getUtcDateForIstTime(now, officePunchOutTime);
+    const stalePunchIns = await Attendance.find({
+      "punchIn.time": { $exists: true, $lte: autoPunchOutTime },
+      date: {
+        $gte: getUtcDateForIstTime(now, "00:00"),
+        $lte: getUtcDateForIstTime(now, "23:59"),
+      },
+      "punchOut.time": { $exists: false },
+      missedPunchOut: { $ne: true },
+    });
+
+    if (stalePunchIns.length === 0) {
+      console.log("[AutoPunchOut] No stale punch-ins found.");
+      return;
+    }
+
+    for (const attendance of stalePunchIns) {
+      const punchOutTime = autoPunchOutTime;
+      const workHours = Math.max(
+        (punchOutTime.getTime() - new Date(attendance.punchIn.time).getTime()) / (60 * 60 * 1000),
+        0
+      );
+
+      attendance.punchOut = {
+        time: punchOutTime,
+        location: attendance.punchIn.location,
+        address: attendance.punchIn.address,
+        isAutoPunchOut: true,
+      };
+      attendance.workHours = workHours;
+      attendance.overtime = Number(Math.max(workHours - 8, 0).toFixed(2));
+      attendance.missedPunchOut = true;
+      attendance.remarks = `User did not punch out. Auto punched out at ${officePunchOutTime}.`;
+
+      await attendance.save();
+      console.log(`[AutoPunchOut] User ${attendance.user} auto punched at ${punchOutTime}`);
+    }
+
+    console.log(`[AutoPunchOut] Processed ${stalePunchIns.length} record(s)`);
   } catch (error) {
     console.error("[AutoPunchOut] Error:", error.message);
   }

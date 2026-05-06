@@ -77,30 +77,62 @@ const sendLeaveStatusNotification = async (leave, status) => {
   });
 };
 
+const getWorkHours = (punchInTime, punchOutTime) => {
+  if (!punchInTime || !punchOutTime) return 0;
+  const start = new Date(punchInTime);
+  const end = new Date(punchOutTime);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) return 0;
+  return Number(((end.getTime() - start.getTime()) / (60 * 60 * 1000)).toFixed(2));
+};
+
 const applyLeaveToAttendance = async (leave, reviewerId) => {
   for (let day = new Date(leave.startDate); day <= leave.endDate; day = addDays(day, 1)) {
-    await Attendance.findOneAndUpdate(
-      {
+    const existingAttendance = await Attendance.findOne({
+      user: leave.user,
+      date: day,
+    });
+
+    const metadata = {
+      ...(existingAttendance?.metadata instanceof Map
+        ? Object.fromEntries(existingAttendance.metadata)
+        : existingAttendance?.metadata || {}),
+      leaveRequest: leave._id,
+      leaveReason: leave.reason,
+      approvedBy: reviewerId,
+    };
+
+    if (existingAttendance) {
+      existingAttendance.status = "leave";
+      existingAttendance.remarks = leave.reason;
+      existingAttendance.metadata = metadata;
+
+      if (existingAttendance.punchIn?.time && !existingAttendance.punchOut?.time) {
+        const reviewedAt = leave.reviewedAt || new Date();
+        existingAttendance.punchOut = {
+          time: reviewedAt,
+          address: "Leave approved",
+          isAutoPunchOut: true,
+        };
+        existingAttendance.workHours = getWorkHours(existingAttendance.punchIn.time, reviewedAt);
+        existingAttendance.overtime = Number(Math.max(existingAttendance.workHours - 8, 0).toFixed(2));
+        existingAttendance.missedPunchOut = false;
+      } else if (existingAttendance.punchIn?.time && existingAttendance.punchOut?.time) {
+        existingAttendance.workHours = getWorkHours(existingAttendance.punchIn.time, existingAttendance.punchOut.time);
+        existingAttendance.overtime = Number(Math.max(existingAttendance.workHours - 8, 0).toFixed(2));
+      }
+
+      await existingAttendance.save();
+    } else {
+      await Attendance.create({
         user: leave.user,
         date: day,
-      },
-      {
-        $set: {
-          status: "leave",
-          remarks: leave.reason,
-          metadata: {
-            leaveRequest: leave._id,
-            leaveReason: leave.reason,
-            approvedBy: reviewerId,
-          },
-        },
-        $unset: {
-          punchIn: "",
-          punchOut: "",
-        },
-      },
-      { upsert: true, new: true, setDefaultsOnInsert: true },
-    );
+        status: "leave",
+        remarks: leave.reason,
+        workHours: 0,
+        overtime: 0,
+        metadata,
+      });
+    }
   }
 };
 

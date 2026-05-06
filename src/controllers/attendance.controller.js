@@ -6,6 +6,8 @@ import {
     getAttendanceByIdService,
     updateAttendanceService,
     deleteAttendanceService,
+    getAttendanceSettingService,
+    updateAttendanceSettingService,
 } from "../services/attendance.service.js";
 import { sendResponse } from "../utils/response.js";
 import { AppError } from "../errors/customError.js";
@@ -55,6 +57,24 @@ export const markHoliday = async (req, res, next) => {
     try {
         const data = await markHolidayService(req.body, req.user);
         sendResponse(res, 200, "Holiday created successfully", data);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getAttendanceSetting = async (req, res, next) => {
+    try {
+        const data = await getAttendanceSettingService();
+        sendResponse(res, 200, "Attendance settings fetched successfully", data);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const updateAttendanceSetting = async (req, res, next) => {
+    try {
+        const data = await updateAttendanceSettingService(req.body, req.user);
+        sendResponse(res, 200, "Attendance settings updated successfully", data);
     } catch (error) {
         next(error);
     }
