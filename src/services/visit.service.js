@@ -499,20 +499,22 @@ export const getAllVisitsService = async (query, currentUser) => {
   }
 
  if (startDate || endDate) {
-  filter.createdAt = {};
+  filter.visitDate = {};
   if (startDate) {
-    const start = new Date(startDate);
-    start.setHours(0, 0, 0, 0);
-    filter.createdAt.$gte = start;
+    filter.visitDate.$gte = new Date(startDate);
   }
   if (endDate) {
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999); // ← end of day, not UTC midnight
-    filter.createdAt.$lte = end;
+    filter.visitDate.$lte = new Date(endDate);
   }
 }
 
-  if (status) filter.status = status;
+  if (status) {
+    const statuses = String(status)
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+    filter.status = statuses.length > 1 ? { $in: statuses } : statuses[0];
+  }
 
   if (search) {
     filter.$or = [
@@ -527,7 +529,7 @@ export const getAllVisitsService = async (query, currentUser) => {
     Visit.find(filter)
       .populate('user',          'firstName lastName email role')
       .populate('previousVisit', 'locationName')
-      .sort({ createdAt: -1 })
+      .sort({ visitDate: -1, createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit))
       .lean(),

@@ -3,18 +3,26 @@ import BatteryLog from "../models/Batterylog.js";
 export const logBattery = async (req, res) => {
   try {
     const { userId, percentage, isCharging, deviceInfo } = req.body;
-    //console.log("🔋 logBattery HIT — userId:", userId, "| %:", percentage);
+    const resolvedUserId = userId || req.user?._id;
+    const normalizedPercentage = Number(percentage);
 
-    if (!userId || percentage === undefined) {
-      return res.status(400).json({ success: false, error: "userId and percentage are required" });
+    if (!resolvedUserId || percentage === undefined || !Number.isFinite(normalizedPercentage)) {
+      return res.status(400).json({
+        success: false,
+        error: "userId and percentage are required",
+      });
     }
 
-    const log = await BatteryLog.create({ userId, percentage, isCharging, deviceInfo });
-    //console.log("🔋 Saved to DB — _id:", log._id, "| %:", log.percentage);
+    const log = await BatteryLog.create({
+      userId: resolvedUserId,
+      percentage: Math.max(0, Math.min(100, Math.round(normalizedPercentage))),
+      isCharging: Boolean(isCharging),
+      deviceInfo,
+    });
 
     res.status(201).json({ success: true, data: log });
   } catch (err) {
-    console.error("🔋 logBattery ERROR:", err.message);
+    console.error("Battery log error:", err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 };
@@ -47,24 +55,23 @@ export const getAllLatestBattery = async (req, res) => {
       { $sort: { createdAt: -1 } },
       {
         $group: {
-          _id:        { $toString: "$userId" }, // _id = userId string
+          _id: { $toString: "$userId" },
           percentage: { $first: "$percentage" },
           isCharging: { $first: "$isCharging" },
-          lastSeen:   { $first: "$createdAt"  },
+          lastSeen: { $first: "$createdAt" },
         },
       },
     ]);
-    //console.log("🔋 getAllLatestBattery — count:", logs.length);
     res.json({ success: true, data: logs });
   } catch (err) {
-    console.error("🔋 getAllLatestBattery ERROR:", err.message);
+    console.error("getAllLatestBattery error:", err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 };
 
 export const debugBattery = async (req, res) => {
   try {
-    const count  = await BatteryLog.countDocuments();
+    const count = await BatteryLog.countDocuments();
     const sample = await BatteryLog.findOne({}).lean();
     res.json({ count, sample });
   } catch (err) {
