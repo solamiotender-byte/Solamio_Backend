@@ -23,6 +23,8 @@ function haversineKm(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+const distanceMeters = (a, b) => haversineKm(a.lat, a.lng, b.lat, b.lng) * 1000;
+
 const MIN_MOVEMENT_KM = 0.005;
 const MAX_REASONABLE_JUMP_KM = 5;
 const MAX_REASONABLE_SPEED_KMH = 120;
@@ -31,6 +33,9 @@ const PAYABLE_MAX_ACCURACY_METERS = 80;
 const PAYABLE_MAX_SPEED_KMH = 100;
 const PAYABLE_LARGE_GAP_MINUTES = 10;
 const PAYABLE_MAX_SEGMENT_KM = 3;
+const STOP_RADIUS_METERS = 75;
+const STOP_MIN_DURATION_MINUTES = 15;
+const STOP_MAX_ACCURACY_METERS = 120;
 
 const getValidDistanceKm = (previousPoint, nextPoint) => {
   if (!previousPoint) return 0;
@@ -430,6 +435,102 @@ export const getVerifiedDistanceService = async (salesmanId, currentUser, date) 
 };
 
 // ─── Get Location Statistics ──────────────────────────────────────────────────
+const buildDetectedStops = (points = []) => {
+  const validPoints = points
+    .filter((point) =>
+      Number.isFinite(Number(point.lat)) &&
+      Number.isFinite(Number(point.lng)) &&
+      Number(point.accuracy || 0) <= STOP_MAX_ACCURACY_METERS
+    )
+    .sort((a, b) => (getPointTime(a) || 0) - (getPointTime(b) || 0));
+
+  const stops = [];
+  let cluster = [];
+
+  const flushCluster = () => {
+    if (cluster.length < 2) {
+      cluster = [];
+      return;
+    }
+
+    const startedAt = getPointTime(cluster[0]);
+    const endedAt = getPointTime(cluster[cluster.length - 1]);
+    const durationMinutes = startedAt && endedAt
+      ? Math.round((endedAt - startedAt) / 60000)
+      : 0;
+
+    if (durationMinutes >= STOP_MIN_DURATION_MINUTES) {
+      const lat = cluster.reduce((sum, point) => sum + Number(point.lat), 0) / cluster.length;
+      const lng = cluster.reduce((sum, point) => sum + Number(point.lng), 0) / cluster.length;
+      stops.push({
+        id: `stop-${stops.length + 1}-${startedAt || Date.now()}`,
+        locationName: `Stopped ${durationMinutes} min`,
+        status: "Auto Stop",
+        lat: Math.round(lat * 1000000) / 1000000,
+        lng: Math.round(lng * 1000000) / 1000000,
+        address: `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+        checkInTime: cluster[0].recordedAt,
+        checkOutTime: cluster[cluster.length - 1].recordedAt,
+        dwellMinutes: durationMinutes,
+        pointCount: cluster.length,
+        autoDetected: true,
+      });
+    }
+
+    cluster = [];
+  };
+
+  for (const point of validPoints) {
+    if (!cluster.length) {
+      cluster = [point];
+      continue;
+    }
+
+    const anchor = cluster[0];
+    const previousTime = getPointTime(cluster[cluster.length - 1]);
+    const currentTime = getPointTime(point);
+    const gapMinutes = previousTime && currentTime ? (currentTime - previousTime) / 60000 : 0;
+
+    if (distanceMeters(anchor, point) <= STOP_RADIUS_METERS && gapMinutes <= STOP_MIN_DURATION_MINUTES) {
+      cluster.push(point);
+    } else {
+      flushCluster();
+      cluster = [point];
+    }
+  }
+
+  flushCluster();
+  return stops;
+};
+
+export const getDetectedStopsService = async (salesmanId, currentUser, date) => {
+  try {
+    const salesman = await User.findById(salesmanId);
+    if (!salesman) throw new AppError("User not found", 404);
+    await assertSameHeadOffice(currentUser, salesman);
+
+    const { targetDate, start, end } = getDayRange(date);
+    const userObjectId = new mongoose.Types.ObjectId(String(salesmanId));
+    const points = await LocationPoint.find({
+      salesmanId: userObjectId,
+      recordedAt: { $gte: start, $lte: end },
+    })
+      .sort({ recordedAt: 1 })
+      .select("lat lng accuracy recordedAt -_id")
+      .lean();
+
+    return {
+      salesmanId,
+      date: targetDate,
+      radiusMeters: STOP_RADIUS_METERS,
+      minDurationMinutes: STOP_MIN_DURATION_MINUTES,
+      stops: buildDetectedStops(points),
+    };
+  } catch (e) {
+    handleError(e, "Failed to detect stop locations");
+  }
+};
+
 export const getLocationStatsService = async (salesmanId, currentUser, date) => {
   try {
     const salesman = await User.findById(salesmanId);

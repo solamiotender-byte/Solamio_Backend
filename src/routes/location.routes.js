@@ -7,6 +7,7 @@ import {
   getLocationStatsController,
   getTotalDistanceController,
   getVerifiedDistanceController,
+  getDetectedStopsController,
   bulkCreateLocationPointsController,
   deleteExpiredLocationPointsController,
 } from "../controllers/locationPoint.controller.js";
@@ -56,6 +57,12 @@ router.get(
   "/verified-distance",
   allowRoles(["Head_office", "ZSM", "ASM", "TEAM"]),
   getVerifiedDistanceController
+);
+
+router.get(
+  "/stops",
+  allowRoles(["Head_office", "ZSM", "ASM", "TEAM"]),
+  getDetectedStopsController
 );
 
 router.get(

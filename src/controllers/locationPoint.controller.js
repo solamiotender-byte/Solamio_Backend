@@ -6,6 +6,7 @@ import {
   getLocationStatsService,
   getTotalDistanceService,
   getVerifiedDistanceService,
+  getDetectedStopsService,
   bulkCreateLocationPointsService,
   deleteExpiredLocationPointsService,
 } from "../services/locationPoint.service.js";
@@ -77,6 +78,15 @@ export const getVerifiedDistanceController = async (req, res, next) => {
     const { date } = req.query;
     const data = await getVerifiedDistanceService(salesmanId, req.user, date);
     sendResponse(res, 200, "Verified payable distance fetched successfully", data);
+  } catch (e) { next(e); }
+};
+
+export const getDetectedStopsController = async (req, res, next) => {
+  try {
+    const salesmanId = req.query.salesmanId || req.user._id;
+    const { date } = req.query;
+    const data = await getDetectedStopsService(salesmanId, req.user, date);
+    sendResponse(res, 200, "Detected stop locations fetched successfully", data);
   } catch (e) { next(e); }
 };
 
