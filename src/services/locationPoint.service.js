@@ -3,6 +3,7 @@ import LocationPoint from "../models/locationPoint.js";
 import { AppError } from "../errors/customError.js";
 import User from "../models/user.model.js";
 import { assertSameHeadOffice } from "../utils/headOfficeScope.js";
+import mongoose from "mongoose";
 
 const handleError = (error, msg) => {
   if (error instanceof AppError) throw error;
@@ -25,6 +26,11 @@ function haversineKm(lat1, lng1, lat2, lng2) {
 const MIN_MOVEMENT_KM = 0.005;
 const MAX_REASONABLE_JUMP_KM = 5;
 const MAX_REASONABLE_SPEED_KMH = 120;
+const PAYABLE_MIN_MOVEMENT_KM = 0.03;
+const PAYABLE_MAX_ACCURACY_METERS = 80;
+const PAYABLE_MAX_SPEED_KMH = 100;
+const PAYABLE_LARGE_GAP_MINUTES = 10;
+const PAYABLE_MAX_SEGMENT_KM = 3;
 
 const getValidDistanceKm = (previousPoint, nextPoint) => {
   if (!previousPoint) return 0;
@@ -54,6 +60,221 @@ const getValidDistanceKm = (previousPoint, nextPoint) => {
   );
 
   return dist <= maxReasonableDistance ? dist : 0;
+};
+
+const toDateString = (date = new Date()) => {
+  const normalized = date instanceof Date ? date : new Date(date);
+  const year = normalized.getFullYear();
+  const month = String(normalized.getMonth() + 1).padStart(2, "0");
+  const day = String(normalized.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const getDayRange = (date) => {
+  const target = date || toDateString();
+  const [year, month, day] = String(target).split("-").map(Number);
+  const valid = Number.isFinite(year) && Number.isFinite(month) && Number.isFinite(day);
+  const start = valid ? new Date(year, month - 1, day, 0, 0, 0, 0) : new Date();
+  if (!valid) start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setHours(23, 59, 59, 999);
+  return { targetDate: toDateString(start), start, end };
+};
+
+const getPointTime = (point) => {
+  const time = point?.recordedAt ? new Date(point.recordedAt).getTime() : NaN;
+  return Number.isFinite(time) ? time : null;
+};
+
+const buildFlag = (code, message, severity = "warning", meta = {}) => ({
+  code,
+  message,
+  severity,
+  ...meta,
+});
+
+const buildAuditSegment = (from, to, status, reason, segmentKm = 0, speedKmh = 0) => ({
+  from: { lat: Number(from.lat), lng: Number(from.lng), recordedAt: from.recordedAt || null },
+  to: { lat: Number(to.lat), lng: Number(to.lng), recordedAt: to.recordedAt || null },
+  status,
+  reason,
+  distanceKm: Math.round(segmentKm * 1000) / 1000,
+  speedKmh: Math.round(speedKmh * 10) / 10,
+});
+
+const calculateVerifiedDistance = (points = []) => {
+  const sorted = [...points]
+    .filter((point) => Number.isFinite(Number(point.lat)) && Number.isFinite(Number(point.lng)))
+    .sort((a, b) => (getPointTime(a) || 0) - (getPointTime(b) || 0));
+
+  const flags = [];
+  const acceptedPoints = [];
+  let payableKm = 0;
+  let rawKm = 0;
+  let rejectedPoints = 0;
+  let poorAccuracyPoints = 0;
+  let impossibleSpeedSegments = 0;
+  let largeJumpSegments = 0;
+  let offlineGapSegments = 0;
+  let duplicateOrNoisePoints = 0;
+  const auditSegments = [];
+
+  for (const point of sorted) {
+    const accuracy = Number(point.accuracy || 0);
+    if (accuracy > PAYABLE_MAX_ACCURACY_METERS) {
+      poorAccuracyPoints += 1;
+      rejectedPoints += 1;
+      if (acceptedPoints.length) {
+        const previous = acceptedPoints[acceptedPoints.length - 1];
+        const segmentKm = haversineKm(previous.lat, previous.lng, point.lat, point.lng);
+        auditSegments.push(buildAuditSegment(
+          previous,
+          point,
+          "rejected",
+          "Poor GPS accuracy",
+          segmentKm
+        ));
+      }
+      continue;
+    }
+
+    if (!acceptedPoints.length) {
+      acceptedPoints.push(point);
+      continue;
+    }
+
+    const previous = acceptedPoints[acceptedPoints.length - 1];
+    const segmentKm = haversineKm(previous.lat, previous.lng, point.lat, point.lng);
+    const previousTime = getPointTime(previous);
+    const currentTime = getPointTime(point);
+    const elapsedHours =
+      previousTime && currentTime ? Math.max((currentTime - previousTime) / 3600000, 0) : 0;
+    const speedKmh = elapsedHours > 0 ? segmentKm / elapsedHours : 0;
+
+    rawKm += segmentKm;
+
+    if (segmentKm < PAYABLE_MIN_MOVEMENT_KM) {
+      duplicateOrNoisePoints += 1;
+      rejectedPoints += 1;
+      auditSegments.push(buildAuditSegment(
+        previous,
+        point,
+        "rejected",
+        "GPS noise or very small movement",
+        segmentKm,
+        speedKmh
+      ));
+      continue;
+    }
+
+    const hasLargeGap = elapsedHours > PAYABLE_LARGE_GAP_MINUTES / 60;
+    if (elapsedHours > PAYABLE_LARGE_GAP_MINUTES / 60) {
+      offlineGapSegments += 1;
+    }
+
+    if (segmentKm > PAYABLE_MAX_SEGMENT_KM) {
+      largeJumpSegments += 1;
+      rejectedPoints += 1;
+      auditSegments.push(buildAuditSegment(
+        previous,
+        point,
+        "rejected",
+        "Large GPS jump",
+        segmentKm,
+        speedKmh
+      ));
+      continue;
+    }
+
+    if (speedKmh > PAYABLE_MAX_SPEED_KMH) {
+      impossibleSpeedSegments += 1;
+      rejectedPoints += 1;
+      auditSegments.push(buildAuditSegment(
+        previous,
+        point,
+        "rejected",
+        "Impossible travel speed",
+        segmentKm,
+        speedKmh
+      ));
+      continue;
+    }
+
+    payableKm += segmentKm;
+    auditSegments.push(buildAuditSegment(
+      previous,
+      point,
+      hasLargeGap ? "review" : "payable",
+      hasLargeGap ? "Tracking gap, review before payment" : "Verified payable movement",
+      segmentKm,
+      speedKmh
+    ));
+    acceptedPoints.push(point);
+  }
+
+  if (poorAccuracyPoints) {
+    flags.push(buildFlag(
+      "POOR_GPS_ACCURACY",
+      `${poorAccuracyPoints} point(s) ignored because GPS accuracy was poor.`,
+      "warning",
+      { count: poorAccuracyPoints }
+    ));
+  }
+
+  if (offlineGapSegments) {
+    flags.push(buildFlag(
+      "TRACKING_GAP",
+      `${offlineGapSegments} tracking gap(s) above ${PAYABLE_LARGE_GAP_MINUTES} minutes found. Review before payment.`,
+      "review",
+      { count: offlineGapSegments }
+    ));
+  }
+
+  if (largeJumpSegments) {
+    flags.push(buildFlag(
+      "LARGE_GPS_JUMP",
+      `${largeJumpSegments} large jump segment(s) ignored.`,
+      "review",
+      { count: largeJumpSegments }
+    ));
+  }
+
+  if (impossibleSpeedSegments) {
+    flags.push(buildFlag(
+      "IMPOSSIBLE_SPEED",
+      `${impossibleSpeedSegments} segment(s) ignored because speed was too high.`,
+      "review",
+      { count: impossibleSpeedSegments }
+    ));
+  }
+
+  if (acceptedPoints.length < 2 && sorted.length > 0) {
+    flags.push(buildFlag(
+      "INSUFFICIENT_VALID_POINTS",
+      "Not enough valid GPS movement points to calculate payable KM.",
+      "review"
+    ));
+  }
+
+  return {
+    payableKm: Math.round(payableKm * 1000) / 1000,
+    rawKm: Math.round(rawKm * 1000) / 1000,
+    acceptedPoints: acceptedPoints.length,
+    rejectedPoints,
+    totalPoints: sorted.length,
+    duplicateOrNoisePoints,
+    auditSegments,
+    flags,
+    firstRecorded: sorted[0]?.recordedAt || null,
+    lastRecorded: sorted[sorted.length - 1]?.recordedAt || null,
+    rules: {
+      maxAccuracyMeters: PAYABLE_MAX_ACCURACY_METERS,
+      maxSpeedKmh: PAYABLE_MAX_SPEED_KMH,
+      largeGapMinutes: PAYABLE_LARGE_GAP_MINUTES,
+      minMovementKm: PAYABLE_MIN_MOVEMENT_KM,
+      maxSegmentKm: PAYABLE_MAX_SEGMENT_KM,
+    },
+  };
 };
 
 // ─── Create single Location Point ────────────────────────────────────────────
@@ -156,9 +377,10 @@ export const getTotalDistanceService = async (salesmanId, currentUser, date) => 
     await assertSameHeadOffice(currentUser, salesman);
 
     const targetDate = date || new Date().toISOString().split("T")[0];
+    const userObjectId = new mongoose.Types.ObjectId(String(salesmanId));
 
     const result = await LocationPoint.aggregate([
-      { $match: { salesmanId, date: targetDate } },
+      { $match: { salesmanId: userObjectId, date: targetDate } },
       {
         $group: {
           _id:           null,
@@ -178,6 +400,32 @@ export const getTotalDistanceService = async (salesmanId, currentUser, date) => 
     };
   } catch (e) {
     handleError(e, "Failed to calculate total distance");
+  }
+};
+
+export const getVerifiedDistanceService = async (salesmanId, currentUser, date) => {
+  try {
+    const salesman = await User.findById(salesmanId);
+    if (!salesman) throw new AppError("User not found", 404);
+    await assertSameHeadOffice(currentUser, salesman);
+
+    const { targetDate, start, end } = getDayRange(date);
+    const userObjectId = new mongoose.Types.ObjectId(String(salesmanId));
+    const points = await LocationPoint.find({
+      salesmanId: userObjectId,
+      recordedAt: { $gte: start, $lte: end },
+    })
+      .sort({ recordedAt: 1 })
+      .select("lat lng accuracy speed distanceFromPrevious recordedAt -_id")
+      .lean();
+
+    return {
+      salesmanId,
+      date: targetDate,
+      ...calculateVerifiedDistance(points),
+    };
+  } catch (e) {
+    handleError(e, "Failed to calculate verified payable distance");
   }
 };
 

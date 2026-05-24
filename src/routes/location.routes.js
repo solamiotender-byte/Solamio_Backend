@@ -6,6 +6,7 @@ import {
   getTodayLocationPathController,
   getLocationStatsController,
   getTotalDistanceController,
+  getVerifiedDistanceController,
   bulkCreateLocationPointsController,
   deleteExpiredLocationPointsController,
 } from "../controllers/locationPoint.controller.js";
@@ -47,6 +48,14 @@ router.get(
   "/distance",
   allowRoles(["Head_office", "ZSM", "ASM", "TEAM"]),
   getTotalDistanceController
+);
+
+// GET /location/verified-distance?salesmanId=&date=YYYY-MM-DD
+// Returns payable KM plus review flags for admin approval.
+router.get(
+  "/verified-distance",
+  allowRoles(["Head_office", "ZSM", "ASM", "TEAM"]),
+  getVerifiedDistanceController
 );
 
 router.get(

@@ -5,6 +5,7 @@ import {
   getTodayLocationPathService,
   getLocationStatsService,
   getTotalDistanceService,
+  getVerifiedDistanceService,
   bulkCreateLocationPointsService,
   deleteExpiredLocationPointsService,
 } from "../services/locationPoint.service.js";
@@ -65,6 +66,17 @@ export const getTotalDistanceController = async (req, res, next) => {
     const { date }   = req.query;
     const data       = await getTotalDistanceService(salesmanId, req.user, date);
     sendResponse(res, 200, "Total distance fetched successfully", data);
+  } catch (e) { next(e); }
+};
+
+// GET /location/verified-distance?salesmanId=&date=YYYY-MM-DD
+// Returns payable KM with review flags for poor GPS, jumps, and tracking gaps.
+export const getVerifiedDistanceController = async (req, res, next) => {
+  try {
+    const salesmanId = req.query.salesmanId || req.user._id;
+    const { date } = req.query;
+    const data = await getVerifiedDistanceService(salesmanId, req.user, date);
+    sendResponse(res, 200, "Verified payable distance fetched successfully", data);
   } catch (e) { next(e); }
 };
 
