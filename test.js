@@ -10,6 +10,7 @@ export const calculateDistanceKm = (lat1, lon1, lat2, lon2) => {
   const dLat = toRad(lat2 - lat1);
   const dLon = toRad(lon2 - lon1);
 
+  
   const a =
     Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(lat1)) *
