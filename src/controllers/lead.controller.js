@@ -265,9 +265,18 @@ export const getInstallationSummaryController = async (req, res, next) => {
 
 export const  uploadLeadController = async (req, res, next) => {
   try {
+    const parsedBody =
+      typeof req.body?.data === "string"
+        ? { ...req.body, ...JSON.parse(req.body.data) }
+        : req.body;
+
+    if (parsedBody && Object.prototype.hasOwnProperty.call(parsedBody, "data")) {
+      delete parsedBody.data;
+    }
+
     const updatedLead = await uploadLeadService(
       req.params.id,
-      req.body,
+      parsedBody,
       req.user._id,
       req.files
     );

@@ -1425,7 +1425,8 @@ export const uploadLeadService = async (id, data, userId, files = {}) => {
     /* 🔹 Fetch Lead */
     const lead = await Lead.findOne({
       _id: id,
-      status: "Document Submission",
+      status: { $in: ["Registration", "Document Submission"] },
+      isDeleted: false,
       ...visibilityFilter,
     });
 
@@ -1485,9 +1486,25 @@ export const uploadLeadService = async (id, data, userId, files = {}) => {
       });
     }
 
-    lead.documentStatus = data.documentStatus;
-    lead.documentSubmissionDate = new Date();
+    if (data?.documentStatus) {
+      lead.documentStatus = data.documentStatus;
+    }
+    lead.documentSubmissionDate = data?.documentSubmissionDate
+      ? new Date(data.documentSubmissionDate)
+      : new Date();
     lead.lastContactedAt = new Date();
+
+    if (lead.status === "Registration") {
+      lead.status = "Document Submission";
+      lead.stageTimeline ??= [];
+      lead.stageTimeline.push({
+        stage: "Document Submission",
+        notes: "Registration documents uploaded",
+        updatedBy: currentUser._id,
+        updatedRole: currentUser.role,
+        updatedAt: new Date(),
+      });
+    }
 
     await lead.save();
 

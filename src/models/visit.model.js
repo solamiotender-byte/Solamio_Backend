@@ -180,7 +180,6 @@ const visitSchema = new mongoose.Schema(
 
 visitSchema.index({ user: 1, createdAt: -1 });
 visitSchema.index({ user: 1, status: 1 });
-visitSchema.index({ coordinates: "2dsphere" });
 visitSchema.index({ isLeadCreate: 1, createdAt: -1 }); // For filtering leads created from visits
 
 /* ================= VIRTUALS ================= */
@@ -274,5 +273,28 @@ visitSchema.statics.getVisitsWithLeadStats = async function (userId, startDate, 
 };
 
 const Visit = mongoose.model("Visit", visitSchema);
+
+const cleanupLegacyVisitGeoIndex = async () => {
+  try {
+    const indexes = await Visit.collection.indexes();
+    const hasLegacyGeoIndex = indexes.some((index) => index?.name === "coordinates_2dsphere");
+
+    if (hasLegacyGeoIndex) {
+      await Visit.collection.dropIndex("coordinates_2dsphere");
+      console.warn('Dropped legacy Visit index "coordinates_2dsphere" because visits store coordinates as { lat, lng }, not GeoJSON.');
+    }
+  } catch (error) {
+    // Ignore namespace/index-not-found cases; log anything else for visibility.
+    if (!["NamespaceNotFound", "IndexNotFound"].includes(error?.codeName)) {
+      console.error("Failed to clean up legacy Visit geo index:", error.message);
+    }
+  }
+};
+
+if (mongoose.connection.readyState === 1) {
+  cleanupLegacyVisitGeoIndex();
+} else {
+  mongoose.connection.once("open", cleanupLegacyVisitGeoIndex);
+}
 
 export default Visit;
