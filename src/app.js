@@ -34,6 +34,7 @@ const allowedOrigins = [
   "http://localhost:3001",
   "https://solar-frontend-lake.vercel.app",
   "https://solar-frontend-seven.vercel.app",
+  "https://solamio-frontend.vercel.app",
   "https://sunergytechsolar.com",
   "https://www.sunergytechsolar.com",
 ];
