@@ -12,9 +12,10 @@ let io = null;
 export const initializeSocket = (server) => {
   io = new Server(server, {
     cors: {
-      origin:
-        process.env.CLIENT_URL ||
-        "https://360-solar.netlify.app",
+      origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        callback(null, true);
+      },
       methods: ["GET", "POST", "PUT", "DELETE"],
       credentials: true,
       allowedHeaders: ["Authorization", "Content-Type"],
