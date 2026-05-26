@@ -22,6 +22,29 @@ import {
    HELPERS
 ========================================================= */
 
+const VISIT_PHOTO_RETENTION_DAYS = 7;
+const VISIT_PHOTO_RETENTION_MS = VISIT_PHOTO_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+
+const shouldExposeVisitPhotos = (visit) => {
+  const referenceDate = visit?.visitDate || visit?.createdAt;
+  if (!referenceDate) return true;
+
+  const parsedDate = new Date(referenceDate);
+  if (Number.isNaN(parsedDate.getTime())) return true;
+
+  return Date.now() - parsedDate.getTime() < VISIT_PHOTO_RETENTION_MS;
+};
+
+const sanitizeVisitPhotos = (visit) => {
+  if (!visit || typeof visit !== "object") return visit;
+  if (shouldExposeVisitPhotos(visit)) return visit;
+
+  return {
+    ...visit,
+    photos: [],
+  };
+};
+
 const getTodayAttendance = async (userId) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -532,7 +555,7 @@ export const getAllVisitsService = async (query, currentUser) => {
   ]);
 
   return {
-    visits,
+    visits: visits.map(sanitizeVisitPhotos),
     pagination: {
       currentPage: parseInt(page),
       totalPages:  Math.ceil(total / parseInt(limit)),
@@ -559,7 +582,7 @@ export const getVisitByIdService = async (visitId, currentUser) => {
     throw new AppError("Unauthorized", 403);
   }
 
-  return visit;
+  return sanitizeVisitPhotos(visit);
 };
 
 /* =========================================================
@@ -618,7 +641,8 @@ export const getRecentActivityService = async (currentUser) => {
     .populate('user', 'firstName lastName email role')
     .sort({ createdAt: -1 })
     .limit(5)
-    .lean();
+    .lean()
+    .then((visits) => visits.map(sanitizeVisitPhotos));
 };
 
 /* =========================================================
@@ -1464,7 +1488,7 @@ export const getTeamMemberPerformanceService = async (memberId, currentUser) => 
           previousLocation: v.previousVisit?.locationName,
           travelTime:       v.travelTimeMinutes ? `${v.travelTimeMinutes} min` : 'N/A',
           coordinates:      v.coordinates,
-          photos:           v.photos?.map(p => p.url || p) || [],
+          photos:           shouldExposeVisitPhotos(v) ? (v.photos?.map(p => p.url || p) || []) : [],
           verified:         v.verified,
           remarks:          v.remarks || null,   // ← description for 'Other' visits
           isLeadCreate:     v.isLeadCreate,

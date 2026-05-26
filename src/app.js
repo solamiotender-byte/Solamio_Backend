@@ -19,6 +19,7 @@ import {
   startRestoreCron,
 } from "./cron/dbBackup.cron.js";
 import { startFollowUpNotificationCron } from "./cron/followUpNotification.cron.js";
+import { startVisitPhotoCleanupCron } from "./cron/visitPhotoCleanup.cron.js";
 
 const app = express();
 
@@ -27,6 +28,7 @@ startHourlyBackup();
 startRestoreCron();
 startDailyCopy();
 startFollowUpNotificationCron();
+startVisitPhotoCleanupCron();
 
 // ==================== CORS ====================
 const allowedOrigins = [

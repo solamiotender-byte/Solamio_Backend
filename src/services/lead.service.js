@@ -1494,18 +1494,6 @@ export const uploadLeadService = async (id, data, userId, files = {}) => {
       : new Date();
     lead.lastContactedAt = new Date();
 
-    if (lead.status === "Registration") {
-      lead.status = "Document Submission";
-      lead.stageTimeline ??= [];
-      lead.stageTimeline.push({
-        stage: "Document Submission",
-        notes: "Registration documents uploaded",
-        updatedBy: currentUser._id,
-        updatedRole: currentUser.role,
-        updatedAt: new Date(),
-      });
-    }
-
     await lead.save();
 
     /* 🔹 Return Populated Lead */
