@@ -11,5 +11,7 @@ const s3Client = new S3Client({
   },
 });
 
+
+
 export const BUCKET_NAME = process.env.AWS_BUCKET_NAME;
 export default s3Client;
