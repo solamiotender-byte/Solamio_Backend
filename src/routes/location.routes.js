@@ -6,6 +6,8 @@ import {
   getTodayLocationPathController,
   getLocationStatsController,
   getTotalDistanceController,
+  getRoadTravelDistanceController,
+  getStayedLocationsController,
   getVerifiedDistanceController,
   getDetectedStopsController,
   bulkCreateLocationPointsController,
@@ -49,6 +51,20 @@ router.get(
   "/distance",
   allowRoles(["Head_office", "ZSM", "ASM", "TEAM"]),
   getTotalDistanceController
+);
+
+// GET /location/travel-distance?salesmanId=&date=YYYY-MM-DD
+// Google road distance for petrol calculation.
+router.get(
+  "/stays",
+  allowRoles(["Head_office", "ZSM", "ASM", "TEAM"]),
+  getStayedLocationsController
+);
+
+router.get(
+  "/travel-distance",
+  allowRoles(["Head_office", "ZSM", "ASM", "TEAM"]),
+  getRoadTravelDistanceController
 );
 
 // GET /location/verified-distance?salesmanId=&date=YYYY-MM-DD

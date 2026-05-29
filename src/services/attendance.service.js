@@ -127,7 +127,6 @@ const storeAttendanceLocationPoint = async ({
     speed: Number(speed ?? 0),
     recordedAt,
     distanceFromPrevious,
-    expiresAt: new Date(recordedAt.getTime() + 24 * 60 * 60 * 1000),
   });
 };
 

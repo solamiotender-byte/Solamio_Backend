@@ -2,7 +2,10 @@
 import LocationPoint from "../models/locationPoint.js";
 import { AppError } from "../errors/customError.js";
 import User from "../models/user.model.js";
+import Attendance from "../models/attendance.model.js";
+import Visit from "../models/visit.model.js";
 import { assertSameHeadOffice } from "../utils/headOfficeScope.js";
+import { getAddressFromCoords } from "../utils/locationUtils.js";
 import mongoose from "mongoose";
 
 const handleError = (error, msg) => {
@@ -36,6 +39,17 @@ const PAYABLE_MAX_SEGMENT_KM = 3;
 const STOP_RADIUS_METERS = 75;
 const STOP_MIN_DURATION_MINUTES = 15;
 const STOP_MAX_ACCURACY_METERS = 120;
+const DEFAULT_STAY_MINUTES = 15;
+const STAY_RADIUS_KM = 0.15;
+const MAX_STAY_ACCURACY_METRES = 150;
+
+const isValidCoordinate = (lat, lng) =>
+  Number.isFinite(Number(lat)) &&
+  Number.isFinite(Number(lng)) &&
+  Number(lat) >= -90 &&
+  Number(lat) <= 90 &&
+  Number(lng) >= -180 &&
+  Number(lng) <= 180;
 
 const getValidDistanceKm = (previousPoint, nextPoint) => {
   if (!previousPoint) return 0;
@@ -86,6 +100,16 @@ const getDayRange = (date) => {
   return { targetDate: toDateString(start), start, end };
 };
 
+const getDateRange = (date) => {
+  const value = date && /^\d{4}-\d{2}-\d{2}$/.test(date)
+    ? date
+    : new Date().toISOString().split("T")[0];
+  const [year, month, day] = value.split("-").map(Number);
+  const start = new Date(year, month - 1, day, 0, 0, 0, 0);
+  const end = new Date(year, month - 1, day, 23, 59, 59, 999);
+  return { value, start, end };
+};
+
 const getPointTime = (point) => {
   const time = point?.recordedAt ? new Date(point.recordedAt).getTime() : NaN;
   return Number.isFinite(time) ? time : null;
@@ -106,6 +130,59 @@ const buildAuditSegment = (from, to, status, reason, segmentKm = 0, speedKmh = 0
   distanceKm: Math.round(segmentKm * 1000) / 1000,
   speedKmh: Math.round(speedKmh * 10) / 10,
 });
+
+const pushTravelPoint = (points, point) => {
+  if (!isValidCoordinate(point?.lat, point?.lng)) return;
+  const normalized = {
+    label: point.label,
+    type: point.type,
+    lat: Number(point.lat),
+    lng: Number(point.lng),
+    time: point.time ? new Date(point.time) : null,
+    address: point.address || null,
+  };
+  const last = points[points.length - 1];
+  if (
+    last &&
+    Math.abs(last.lat - normalized.lat) < 0.00001 &&
+    Math.abs(last.lng - normalized.lng) < 0.00001
+  ) {
+    return;
+  }
+  points.push(normalized);
+};
+
+const fetchGoogleRoadSegment = async (from, to) => {
+  const key = process.env.GOOGLE_MAPS_API_KEY;
+  if (!key) {
+    throw new AppError("GOOGLE_MAPS_API_KEY is not configured", 500);
+  }
+
+  const url =
+    `https://maps.googleapis.com/maps/api/directions/json` +
+    `?origin=${from.lat},${from.lng}` +
+    `&destination=${to.lat},${to.lng}` +
+    `&mode=driving&key=${key}`;
+
+  const response = await fetch(url);
+  const data = await response.json();
+
+  if (!response.ok || data.status !== "OK") {
+    throw new Error(data?.error_message || data?.status || "Google Directions API failed");
+  }
+
+  const leg = data.routes?.[0]?.legs?.[0];
+  if (!leg?.distance?.value) {
+    throw new Error("Google Directions API returned no route distance");
+  }
+
+  return {
+    distanceKm: leg.distance.value / 1000,
+    distanceText: leg.distance.text,
+    durationMinutes: Math.round((leg.duration?.value || 0) / 60),
+    durationText: leg.duration?.text || "",
+  };
+};
 
 const calculateVerifiedDistance = (points = []) => {
   const sorted = [...points]
@@ -282,6 +359,204 @@ const calculateVerifiedDistance = (points = []) => {
   };
 };
 
+const calculateCleanedDistanceStats = (points = []) => {
+  const sortedPoints = [...points]
+    .filter((point) => isValidCoordinate(point?.lat, point?.lng))
+    .sort((a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime());
+
+  let previous = null;
+  let totalKm = 0;
+  let acceptedSegments = 0;
+
+  for (const point of sortedPoints) {
+    const normalized = {
+      lat: Number(point.lat),
+      lng: Number(point.lng),
+      accuracy: Number(point.accuracy || 0),
+      recordedAt: point.recordedAt,
+    };
+
+    if (normalized.accuracy > 100) continue;
+
+    if (previous) {
+      const distanceKm = getValidDistanceKm(previous, normalized);
+      if (distanceKm > 0) {
+        totalKm += distanceKm;
+        acceptedSegments += 1;
+      }
+    }
+
+    previous = normalized;
+  }
+
+  return {
+    totalKm: Number(totalKm.toFixed(3)),
+    totalPoints: sortedPoints.length,
+    acceptedSegments,
+    firstRecorded: sortedPoints[0]?.recordedAt || null,
+    lastRecorded: sortedPoints[sortedPoints.length - 1]?.recordedAt || null,
+  };
+};
+
+const geocodeCache = new Map();
+
+const getCachedAddressLabel = async (lat, lng) => {
+  const cacheKey = `${Number(lat).toFixed(4)},${Number(lng).toFixed(4)}`;
+  if (geocodeCache.has(cacheKey)) {
+    return geocodeCache.get(cacheKey);
+  }
+
+  const fullAddress = await getAddressFromCoords(Number(lat), Number(lng));
+  const shortLabel = String(fullAddress || "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .slice(0, 3)
+    .join(", ");
+
+  const resolved = {
+    full: fullAddress || cacheKey,
+    short: shortLabel || fullAddress || cacheKey,
+  };
+
+  geocodeCache.set(cacheKey, resolved);
+  return resolved;
+};
+
+const finalizeStayCluster = (cluster, minimumStayMinutes) => {
+  if (!cluster?.points?.length) return null;
+
+  const startTime = new Date(cluster.startTime);
+  const endTime = new Date(cluster.endTime);
+  const durationMs = endTime.getTime() - startTime.getTime();
+  const durationMinutes = Math.round(durationMs / 60000);
+
+  if (durationMinutes < minimumStayMinutes) return null;
+
+  const centroidLat =
+    cluster.points.reduce((sum, point) => sum + Number(point.lat), 0) / cluster.points.length;
+  const centroidLng =
+    cluster.points.reduce((sum, point) => sum + Number(point.lng), 0) / cluster.points.length;
+
+  return {
+    lat: Number(centroidLat.toFixed(6)),
+    lng: Number(centroidLng.toFixed(6)),
+    startTime,
+    endTime,
+    durationMinutes,
+    pointCount: cluster.points.length,
+  };
+};
+
+const addPointToStayCluster = (cluster, point) => {
+  const count = cluster.points.length;
+  const lat = Number(point.lat);
+  const lng = Number(point.lng);
+
+  cluster.anchorLat = ((cluster.anchorLat * count) + lat) / (count + 1);
+  cluster.anchorLng = ((cluster.anchorLng * count) + lng) / (count + 1);
+  cluster.endTime = point.recordedAt;
+  cluster.points.push(point);
+};
+
+const buildStayEvents = (points, minimumStayMinutes) => {
+  if (!Array.isArray(points) || points.length === 0) return [];
+
+  const sortedPoints = [...points]
+    .filter((point) => {
+      const accuracy = Number(point?.accuracy || 0);
+      return (
+        isValidCoordinate(point?.lat, point?.lng) &&
+        (!accuracy || accuracy <= MAX_STAY_ACCURACY_METRES)
+      );
+    })
+    .sort((a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime());
+
+  if (sortedPoints.length === 0) return [];
+
+  const stayEvents = [];
+  let cluster = {
+    anchorLat: Number(sortedPoints[0].lat),
+    anchorLng: Number(sortedPoints[0].lng),
+    startTime: sortedPoints[0].recordedAt,
+    endTime: sortedPoints[0].recordedAt,
+    points: [sortedPoints[0]],
+  };
+
+  for (let i = 1; i < sortedPoints.length; i += 1) {
+    const point = sortedPoints[i];
+    const accuracyBufferKm = Math.min(Number(point.accuracy || 0), 80) / 1000;
+    const distanceFromAnchor = haversineKm(
+      cluster.anchorLat,
+      cluster.anchorLng,
+      Number(point.lat),
+      Number(point.lng)
+    );
+
+    if (distanceFromAnchor <= STAY_RADIUS_KM + accuracyBufferKm) {
+      addPointToStayCluster(cluster, point);
+      continue;
+    }
+
+    const finalized = finalizeStayCluster(cluster, minimumStayMinutes);
+    if (finalized) stayEvents.push(finalized);
+
+    cluster = {
+      anchorLat: Number(point.lat),
+      anchorLng: Number(point.lng),
+      startTime: point.recordedAt,
+      endTime: point.recordedAt,
+      points: [point],
+    };
+  }
+
+  const finalized = finalizeStayCluster(cluster, minimumStayMinutes);
+  if (finalized) stayEvents.push(finalized);
+
+  return stayEvents;
+};
+
+const summarizeStayEvents = async (stayEvents) => {
+  const summaries = [];
+
+  for (const stayEvent of stayEvents) {
+    const address = await getCachedAddressLabel(stayEvent.lat, stayEvent.lng);
+    summaries.push({
+      locationName: address.short,
+      address: address.full,
+      lat: stayEvent.lat,
+      lng: stayEvent.lng,
+      visitCount: 1,
+      totalDurationMinutes: stayEvent.durationMinutes,
+      lastEndTime: stayEvent.endTime,
+      events: [stayEvent],
+    });
+  }
+
+  return summaries
+    .sort((a, b) => {
+      const aTime = new Date(a.events?.[0]?.startTime || a.lastEndTime).getTime();
+      const bTime = new Date(b.events?.[0]?.startTime || b.lastEndTime).getTime();
+      return aTime - bTime;
+    })
+    .map((entry) => ({
+      ...entry,
+      totalDurationLabel:
+        entry.totalDurationMinutes >= 60
+          ? `${Math.floor(entry.totalDurationMinutes / 60)}h ${entry.totalDurationMinutes % 60}m`
+          : `${entry.totalDurationMinutes} min`,
+      events: entry.events
+        .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+        .map((event) => ({
+          ...event,
+          durationLabel:
+            event.durationMinutes >= 60
+              ? `${Math.floor(event.durationMinutes / 60)}h ${event.durationMinutes % 60}m`
+              : `${event.durationMinutes} min`,
+        })),
+    }));
+};
+
 // ─── Create single Location Point ────────────────────────────────────────────
 export const createLocationPointService = async (data, currentUser) => {
   try {
@@ -311,7 +586,6 @@ export const createLocationPointService = async (data, currentUser) => {
       date,
       recordedAt,
       distanceFromPrevious,
-      expiresAt: new Date(recordedAt.getTime() + 24 * 60 * 60 * 1000),
     });
 
     return locationPoint;
@@ -374,7 +648,7 @@ export const getTodayLocationPathService = async (salesmanId, currentUser, optio
 };
 
 // ─── Get Total Distance for a Date ───────────────────────────────────────────
-// Returns total km travelled by summing distanceFromPrevious for all points.
+// Returns total km travelled after filtering GPS jumps from the raw points.
 export const getTotalDistanceService = async (salesmanId, currentUser, date) => {
   try {
     const salesman = await User.findById(salesmanId);
@@ -382,27 +656,15 @@ export const getTotalDistanceService = async (salesmanId, currentUser, date) => 
     await assertSameHeadOffice(currentUser, salesman);
 
     const targetDate = date || new Date().toISOString().split("T")[0];
-    const userObjectId = new mongoose.Types.ObjectId(String(salesmanId));
+    const points = await LocationPoint.find({
+      salesmanId: salesman._id,
+      date: targetDate,
+    })
+      .sort({ recordedAt: 1 })
+      .select("lat lng accuracy recordedAt -_id")
+      .lean();
 
-    const result = await LocationPoint.aggregate([
-      { $match: { salesmanId: userObjectId, date: targetDate } },
-      {
-        $group: {
-          _id:           null,
-          totalKm:       { $sum: "$distanceFromPrevious" },
-          totalPoints:   { $sum: 1 },
-          firstRecorded: { $min: "$recordedAt" },
-          lastRecorded:  { $max: "$recordedAt" },
-        },
-      },
-    ]);
-
-    return result[0] || {
-      totalKm:       0,
-      totalPoints:   0,
-      firstRecorded: null,
-      lastRecorded:  null,
-    };
+    return calculateCleanedDistanceStats(points);
   } catch (e) {
     handleError(e, "Failed to calculate total distance");
   }
@@ -531,6 +793,41 @@ export const getDetectedStopsService = async (salesmanId, currentUser, date) => 
   }
 };
 
+export const getStayedLocationsService = async (
+  salesmanId,
+  currentUser,
+  date,
+  minimumStayMinutes = DEFAULT_STAY_MINUTES
+) => {
+  try {
+    const salesman = await User.findById(salesmanId);
+    if (!salesman) throw new AppError("User not found", 404);
+    await assertSameHeadOffice(currentUser, salesman);
+
+    const targetDate = date || new Date().toISOString().split("T")[0];
+    const points = await LocationPoint.find({
+      salesmanId: salesman._id,
+      date: targetDate,
+    })
+      .sort({ recordedAt: 1 })
+      .select("lat lng recordedAt accuracy speed -_id")
+      .lean();
+
+    const stayEvents = buildStayEvents(points, Number(minimumStayMinutes) || DEFAULT_STAY_MINUTES);
+    const summaries = await summarizeStayEvents(stayEvents);
+
+    return {
+      date: targetDate,
+      minimumStayMinutes: Number(minimumStayMinutes) || DEFAULT_STAY_MINUTES,
+      totalStayedLocations: summaries.length,
+      totalStayEvents: stayEvents.length,
+      stayedLocations: summaries,
+    };
+  } catch (e) {
+    handleError(e, "Failed to fetch stayed locations");
+  }
+};
+
 export const getLocationStatsService = async (salesmanId, currentUser, date) => {
   try {
     const salesman = await User.findById(salesmanId);
@@ -538,36 +835,30 @@ export const getLocationStatsService = async (salesmanId, currentUser, date) => 
     await assertSameHeadOffice(currentUser, salesman);
 
     const targetDate = date || new Date().toISOString().split("T")[0];
+    const points = await LocationPoint.find({
+      salesmanId: salesman._id,
+      date: targetDate,
+    })
+      .sort({ recordedAt: 1 })
+      .select("lat lng accuracy speed recordedAt -_id")
+      .lean();
 
-    const stats = await LocationPoint.aggregate([
-      { $match: { salesmanId, date: targetDate } },
-      {
-        $group: {
-          _id:           null,
-          totalPoints:   { $sum: 1 },
-          totalKm:       { $sum: "$distanceFromPrevious" },   // ← total distance
-          avgSpeed:      { $avg: "$speed" },
-          maxSpeed:      { $max: "$speed" },
-          minSpeed:      { $min: "$speed" },
-          avgAccuracy:   { $avg: "$accuracy" },
-          firstPoint:    { $min: "$recordedAt" },
-          lastPoint:     { $max: "$recordedAt" },
-        },
-      },
-    ]);
+    const distanceStats = calculateCleanedDistanceStats(points);
+    const speeds = points.map((point) => Number(point.speed || 0));
+    const accuracies = points.map((point) => Number(point.accuracy || 0));
 
-    return (
-      stats[0] || {
-        totalPoints: 0,
-        totalKm:     0,
-        avgSpeed:    0,
-        maxSpeed:    0,
-        minSpeed:    0,
-        avgAccuracy: 0,
-        firstPoint:  null,
-        lastPoint:   null,
-      }
-    );
+    return {
+      totalPoints: points.length,
+      totalKm: distanceStats.totalKm,
+      avgSpeed: speeds.length ? speeds.reduce((sum, value) => sum + value, 0) / speeds.length : 0,
+      maxSpeed: speeds.length ? Math.max(...speeds) : 0,
+      minSpeed: speeds.length ? Math.min(...speeds) : 0,
+      avgAccuracy: accuracies.length
+        ? accuracies.reduce((sum, value) => sum + value, 0) / accuracies.length
+        : 0,
+      firstPoint: distanceStats.firstRecorded,
+      lastPoint: distanceStats.lastRecorded,
+    };
   } catch (e) {
     handleError(e, "Failed to fetch location statistics");
   }
@@ -629,7 +920,6 @@ export const bulkCreateLocationPointsService = async (points, currentUser) => {
         date,
         recordedAt,
         distanceFromPrevious,
-        expiresAt: new Date(recordedAt.getTime() + 24 * 60 * 60 * 1000),
       };
     });
 
@@ -643,14 +933,124 @@ export const bulkCreateLocationPointsService = async (points, currentUser) => {
   }
 };
 
-// ─── Delete location points older than 24 hours (safety net) ─────────────────
+// Historical location points are intentionally retained for old map playback.
 export const deleteExpiredLocationPointsService = async () => {
   try {
-    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const result = await LocationPoint.deleteMany({ recordedAt: { $lt: cutoff } });
-    //console.log(`[LocationCleanup] Deleted ${result.deletedCount} expired points`);
-    return result.deletedCount;
+    return 0;
   } catch (e) {
     handleError(e, "Failed to delete expired location points");
+  }
+};
+
+// Petrol reimbursement distance: punch-in -> visits -> punch-out by Google road route.
+export const getRoadTravelDistanceService = async (salesmanId, currentUser, date) => {
+  try {
+    const salesman = await User.findById(salesmanId);
+    if (!salesman) throw new AppError("User not found", 404);
+    await assertSameHeadOffice(currentUser, salesman);
+
+    const { value: targetDate, start, end } = getDateRange(date);
+
+    const attendance = await Attendance.findOne({
+      user: salesman._id,
+      date: { $gte: start, $lte: end },
+    }).lean();
+
+    const visits = await Visit.find({
+      user: salesman._id,
+      $or: [
+        { checkInTime: { $gte: start, $lte: end } },
+        { visitDate: { $gte: start, $lte: end } },
+        { createdAt: { $gte: start, $lte: end } },
+      ],
+      coordinates: { $exists: true, $ne: null },
+    })
+      .sort({ checkInTime: 1, visitDate: 1, createdAt: 1 })
+      .select("locationName address coordinates checkInTime visitDate createdAt")
+      .lean();
+
+    const points = [];
+    if (attendance?.punchIn?.location) {
+      pushTravelPoint(points, {
+        type: "punch-in",
+        label: "Punch In",
+        lat: attendance.punchIn.location.lat,
+        lng: attendance.punchIn.location.lng,
+        time: attendance.punchIn.time,
+        address: attendance.punchIn.address,
+      });
+    }
+
+    for (const visit of visits) {
+      if (String(visit.locationName || "").trim().toLowerCase() === "start location") {
+        continue;
+      }
+      pushTravelPoint(points, {
+        type: "visit",
+        label: visit.locationName || "Visit",
+        lat: visit.coordinates?.lat,
+        lng: visit.coordinates?.lng,
+        time: visit.checkInTime || visit.visitDate || visit.createdAt,
+        address: visit.address,
+      });
+    }
+
+    if (attendance?.punchOut?.location) {
+      pushTravelPoint(points, {
+        type: "punch-out",
+        label: "Punch Out",
+        lat: attendance.punchOut.location.lat,
+        lng: attendance.punchOut.location.lng,
+        time: attendance.punchOut.time,
+        address: attendance.punchOut.address,
+      });
+    }
+
+    if (points.length < 2) {
+      return {
+        date: targetDate,
+        source: "google-road",
+        totalKm: 0,
+        totalDistanceText: "0 km",
+        totalDurationMinutes: 0,
+        totalDurationText: "",
+        pointCount: points.length,
+        segmentCount: 0,
+        points,
+        segments: [],
+      };
+    }
+
+    const segments = [];
+    let totalKm = 0;
+    let totalDurationMinutes = 0;
+
+    for (let i = 1; i < points.length; i++) {
+      const from = points[i - 1];
+      const to = points[i];
+      const road = await fetchGoogleRoadSegment(from, to);
+      totalKm += road.distanceKm;
+      totalDurationMinutes += road.durationMinutes;
+      segments.push({
+        from,
+        to,
+        ...road,
+      });
+    }
+
+    return {
+      date: targetDate,
+      source: "google-road",
+      totalKm: Math.round(totalKm * 1000) / 1000,
+      totalDistanceText: `${(Math.round(totalKm * 10) / 10).toFixed(1)} km`,
+      totalDurationMinutes,
+      totalDurationText: totalDurationMinutes ? `${totalDurationMinutes} mins` : "",
+      pointCount: points.length,
+      segmentCount: segments.length,
+      points,
+      segments,
+    };
+  } catch (e) {
+    handleError(e, "Failed to calculate road travel distance");
   }
 };

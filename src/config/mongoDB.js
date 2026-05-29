@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import dotenv from "dotenv";
+import LocationPoint from "../models/locationPoint.js";
 
 dotenv.config();
 
@@ -17,6 +18,15 @@ const connectDB = async () => {
     }
 
     await mongoose.connect(mongoUri);
+
+    try {
+      await LocationPoint.collection.dropIndex("expiresAt_1");
+      console.log("Removed legacy TTL index from location points");
+    } catch (error) {
+      if (error?.codeName !== "IndexNotFound") {
+        console.warn("Failed to remove legacy location TTL index:", error.message);
+      }
+    }
   } catch (error) {
     console.error("MongoDB connection failed:", error.message);
     process.exit(1);

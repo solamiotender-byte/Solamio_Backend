@@ -5,6 +5,8 @@ import {
   getTodayLocationPathService,
   getLocationStatsService,
   getTotalDistanceService,
+  getRoadTravelDistanceService,
+  getStayedLocationsService,
   getVerifiedDistanceService,
   getDetectedStopsService,
   bulkCreateLocationPointsService,
@@ -78,6 +80,31 @@ export const getVerifiedDistanceController = async (req, res, next) => {
     const { date } = req.query;
     const data = await getVerifiedDistanceService(salesmanId, req.user, date);
     sendResponse(res, 200, "Verified payable distance fetched successfully", data);
+  } catch (e) { next(e); }
+};
+
+// GET /location/travel-distance?salesmanId=&date=YYYY-MM-DD
+// Returns Google road distance for petrol calculation.
+export const getRoadTravelDistanceController = async (req, res, next) => {
+  try {
+    const salesmanId = req.query.salesmanId || req.user._id;
+    const { date } = req.query;
+    const data = await getRoadTravelDistanceService(salesmanId, req.user, date);
+    sendResponse(res, 200, "Road travel distance fetched successfully", data);
+  } catch (e) { next(e); }
+};
+
+export const getStayedLocationsController = async (req, res, next) => {
+  try {
+    const salesmanId = req.query.salesmanId || req.user._id;
+    const { date, minimumStayMinutes } = req.query;
+    const data = await getStayedLocationsService(
+      salesmanId,
+      req.user,
+      date,
+      minimumStayMinutes
+    );
+    sendResponse(res, 200, "Stayed locations fetched successfully", data);
   } catch (e) { next(e); }
 };
 

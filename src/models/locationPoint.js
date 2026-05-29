@@ -26,8 +26,8 @@ const locationPointSchema = new mongoose.Schema(
     // Actual GPS timestamp from device
     recordedAt: { type: Date, default: Date.now, index: true },
 
-    // TTL — MongoDB auto-deletes this document 24h after expiresAt
-    expiresAt: { type: Date, expires: 0 },
+    // Historical route points must be retained for old map playback.
+    expiresAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

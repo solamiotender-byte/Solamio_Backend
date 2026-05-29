@@ -1,6 +1,11 @@
 import { Router } from "express";
 import { authenticate } from "../middlewares/verifyToken.js";
 import User from "../models/user.model.js";
+import {
+  getUserNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+} from "../services/notification.service.js";
 
 const router = Router();
 
@@ -65,27 +70,43 @@ router.delete("/device-token", async (req, res, next) => {
   }
 });
 
-router.get("/", (req, res) => {
-  res.status(200).json({
-    success: true,
-    data: {
-      notifications: [],
-    },
-  });
+router.get("/", async (req, res, next) => {
+  try {
+    const notifications = await getUserNotifications(req.user._id, req.query);
+    res.status(200).json({
+      success: true,
+      data: {
+        notifications,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
-router.patch("/:id/read", (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: "Notification marked as read",
-  });
+router.patch("/read-all", async (req, res, next) => {
+  try {
+    await markAllNotificationsRead(req.user._id);
+    res.status(200).json({
+      success: true,
+      message: "All notifications marked as read",
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
-router.patch("/read-all", (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: "All notifications marked as read",
-  });
+router.patch("/:id/read", async (req, res, next) => {
+  try {
+    const notification = await markNotificationRead(req.user._id, req.params.id);
+    res.status(200).json({
+      success: true,
+      message: "Notification marked as read",
+      data: { notification },
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 export default router;

@@ -82,7 +82,7 @@ export const registerLocationEvents = (socket) => {
 
       if (lastPoint) {
         const secondsSinceLast = (now - lastPoint.recordedAt) / 1000;
-        if (secondsSinceLast < 25) {
+        if (secondsSinceLast < 8) {
           socket.emit("location:ack", {
             saved: false,
             skipped: true,
@@ -112,7 +112,6 @@ export const registerLocationEvents = (socket) => {
         accuracy: data.accuracy ?? 0,
         recordedAt: data.time ? new Date(data.time) : now,
         distanceFromPrevious,
-        expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000),
       });
 
       const prev = activeSalesmen.get(userId);
@@ -222,7 +221,6 @@ export const registerLocationEvents = (socket) => {
           accuracy: p.accuracy ?? 0,
           recordedAt,
           distanceFromPrevious,
-          expiresAt: new Date(recordedAt.getTime() + 24 * 60 * 60 * 1000),
         };
       });
 
