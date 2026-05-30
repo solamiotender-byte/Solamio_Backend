@@ -612,7 +612,7 @@ export const autoPunchOutService = async () => {
     const setting = await getAttendanceSetting();
     if (!setting.autoPunchOutEnabled) return;
 
-    const officePunchOutTime = setting.officePunchOutTime || "19:00";
+    const officePunchOutTime = setting.officePunchOutTime || "22:00";
     if (getIstParts(now).minutes < timeToMinutes(officePunchOutTime)) {
       console.log("[AutoPunchOut] Office punch-out time not reached.");
       return;
