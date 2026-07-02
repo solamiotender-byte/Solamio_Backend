@@ -16,7 +16,7 @@ const handleError = (error, msg) => {
 
 /* ================= Fuel Rates ================= */
 export const FUEL_RATES = {
-  Bike: { Petrol: 2, Electric: 0.5, default: 2 },
+  Bike: { Petrol: 3, Electric: 0.5, default: 3 },
   Car: {
     Petrol: 4.5,
     Diesel: 3.8,
